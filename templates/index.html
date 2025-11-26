@@ -1,1 +1,105 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תמיכה לאתר מייצגים - Flask/Render</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header-bar">
+        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" class="header-logo" style="height:48px;">
+        </div>
 
+    <h1>עוזר שאלות נפוצות</h1>
+
+    <h2>שאלות נפוצות:</h2>
+    <ul id="faq-list">
+        {% for q in popular_questions %}
+            <li>
+                {{ loop.index }}. 
+                <span class="question-text">{{ q }}</span> 
+                <button class="answer-btn" data-question="{{ q }}">לתשובה</button>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h2>שאלה חדשה:</h2>
+    <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר">
+    <button id="submit-btn" style="display:none;">שלח</button>
+
+    <div id="response-area"></div>
+
+    <script>
+        // ============================================
+        // JavaScript לטיפול ב-AJAX וקליקים
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const queryInput = document.getElementById('query-input');
+            const responseArea = document.getElementById('response-area');
+            const faqList = document.getElementById('faq-list');
+
+            function performSearch(query) {
+                if (!query) return;
+
+                // 1. הצגת השאלה של המשתמש
+                responseArea.innerHTML = `<div class="user-bubble"><strong>שאלה:</strong> ${query}</div>`;
+                responseArea.innerHTML += `<div class="assistant-text">... מחפש תשובה ...</div>`;
+                
+                // 2. שליחת בקשת AJAX לשרת Flask
+                fetch('/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: query })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    responseArea.innerHTML = `<div class="user-bubble"><strong>שאלה:</strong> ${query}</div>`;
+                    
+                    let content = `<div class="assistant-text"><strong>תשובה:</strong><br>${data.answer}</div>`;
+
+                    if (data.similar_questions && data.similar_questions.length > 0) {
+                        content += '<h4>שאלות קשורות:</h4><ul>';
+                        data.similar_questions.forEach((q, index) => {
+                            content += `<li>${index + 1}. <span class="related-q" data-question="${q}">${q}</span></li>`;
+                        });
+                        content += '</ul>';
+                    }
+
+                    responseArea.innerHTML += content;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    responseArea.innerHTML = `<div class="assistant-text" style="color: red;">אירעה שגיאה בחיבור לשרת או ל-OpenAI.</div>`;
+                });
+            }
+
+            // 3. אירוע שליחה בכפתור אנטר
+            queryInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch(queryInput.value);
+                    queryInput.value = ''; 
+                }
+            });
+
+            // 4. אירוע קליק על שאלות נפוצות
+            faqList.addEventListener('click', function(e) {
+                if (e.target.classList.contains('answer-btn')) {
+                    const q = e.target.getAttribute('data-question');
+                    performSearch(q);
+                }
+            });
+
+            // 5. אירוע קליק על שאלות קשורות
+             responseArea.addEventListener('click', function(e) {
+                if (e.target.classList.contains('related-q')) {
+                    const q = e.target.getAttribute('data-question');
+                    performSearch(q);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
