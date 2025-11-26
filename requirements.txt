@@ -1,1 +1,8 @@
-
+Flask
+gunicorn
+langchain-openai
+langchain-community
+faiss-cpu
+rapidfuzz
+openai
+tiktoken
