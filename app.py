@@ -32,7 +32,7 @@ faq_items = []
 faq_store = None
 embeddings = None
 embeddings_ready = False
-openai_api_key = None
+openai_api_key = None # משתנה גלובלי למפתח ה-API
 
 # הגדרת שאלות נפוצות להצגה בדף הבית
 POPULAR_FAQ_LIST = [
@@ -43,7 +43,7 @@ POPULAR_FAQ_LIST = [
 ]
 
 # ============================================
-# מודלי נתונים ופונקציות עיבוד (מהקוד שלך)
+# מודלי נתונים ופונקציות עיבוד
 # ============================================
 
 @dataclass
@@ -114,17 +114,18 @@ def parse_faq_new(text: str) -> List[FAQItem]:
 
 def format_answer_for_html(text: str) -> str:
     """
-    (פותר בעיות 2 ו-3) מעבד טקסט גולמי לתצוגת HTML:
-    1. מחליף מעברי שורה ב-<br>.
-    2. מדגיש טקסט בתוך סוגריים מרובעים (כגון [קישורים] או [שמות טפסים]) עם ספאן.
+    מעבד טקסט גולמי לתצוגת HTML:
+    1. מחליף מעברי שורה ב-<br> (פותר את הבעיה המקורית של מעברי שורה).
+    2. מדגיש טקסט בתוך סוגריים מרובעים (כגון [קישורים]) שאינם מכילים מירכאות כפולות.
     """
     
-    # 1. טיפול במעברי שורה: החלפת \n ב-<br> (פתרון בעיה 2)
+    # 1. טיפול במעברי שורה: החלפת \n ב-<br>
     formatted_text = text.replace('\n', '<br>')
     
-    # 2. טיפול בטקסט בתוך סוגריים מרובעות (פתרון בעיה 3)
-    # מחליף [טקסט] ב- <span class="highlight">טקסט</span>
-    formatted_text = re.sub(r'\[([^\]]+)\]', r'<span class="highlight">\1</span>', formatted_text)
+    # 2. טיפול בטקסט בתוך סוגריים מרובעות (קישורים/טפסים יטופלו ב-JS)
+    # מחליף [טקסט] ב- <span class="highlight">טקסט</span> רק אם זה לא מכיל מירכאות כפולות (שמציין קישור/טופס)
+    # הסיבה: הקישורים בצורה [כותרת "מזהה"] צריכים להגיע ל-JS כטקסט גולמי כדי שפונקציית JS תטפל בהם.
+    formatted_text = re.sub(r'\[([^"\]]+)\]', r'<span class="highlight">\1</span>', formatted_text)
     
     # 3. טיפול בכותרת המטא-דאטה שמופיעה בתחתית התשובה
     formatted_text = formatted_text.replace("--- מטא דאטה ---", "<hr><code>--- מטא דאטה ---</code>")
@@ -227,7 +228,7 @@ def search_faq(query: str) -> Dict[str, Any]:
     # עיצוב התוצאה הסופית
     answer_text = result_item.answer.strip()
     
-    # הוספת כותרת מטא דאטה
+    # הוספת כותרת מטא-דאטה
     answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
     
     # עיבוד התשובה ל-HTML והוספתה למילון התוצאה
@@ -245,7 +246,9 @@ def load_initial_data():
     global faq_items, faq_store, embeddings_ready, embeddings, openai_api_key
     
     # 1. מפתח API: Render מכניס את זה כמשתנה סביבה
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    # ⚠️ הערה חשובה: חובה להגדיר את משתנה הסביבה OPENAI_API_KEY
+    # כדי שהחיפוש הסמנטי (Embeddings) יעבוד!
+    openai_api_key = os.environ.get("OPENAI_API_KEY") 
     if not openai_api_key:
         print("🚨 אזהרה: משתנה OPENAI_API_KEY לא הוגדר. החיפוש הסמנטי (Embeddings) לא יעבוד.")
     
