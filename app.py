@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # app.py
-# קובץ Flask ראשי עם לוגיקת Embeddings וחיפוש
+# קובץ Flask ראשי המכיל את לוגיקת החיפוש הסמנטי והפאזי.
 
 import os
 import re
@@ -11,7 +12,7 @@ from typing import List, Optional, Dict, Any
 # ייבוא ספריות Flask ו-Jinja2
 from flask import Flask, render_template, request, jsonify
 
-# ייבוא ספריות ה-AI והחיפוש שלך
+# ייבוא ספריות ה-AI והחיפוש
 from rapidfuzz import fuzz
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -22,7 +23,8 @@ from langchain_core.documents import Document
 # ============================================
 
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False # חשוב לתצוגה תקינה של עברית ב-JSON
+# חשוב: מאפשר תצוגת עברית תקינה בתגובות ה-JSON
+app.config['JSON_AS_ASCII'] = False 
 
 # הגדרת משתנים גלובליים (יטענו פעם אחת)
 FAQ_PATH = "faq.txt" # קובץ זה צריך להיות בתיקיית הבסיס
@@ -41,7 +43,7 @@ POPULAR_FAQ_LIST = [
 ]
 
 # ============================================
-# לוגיקת עיבוד וחיפוש (מועתקת מהקוד שלך)
+# מודלי נתונים ופונקציות עיבוד (מהקוד שלך)
 # ============================================
 
 @dataclass
@@ -51,10 +53,9 @@ class FAQItem:
     answer: str
 
 def normalize_he(s: str) -> str:
-    """מנקה, מאחד, ומרחיב ניסוחים חלקיים לשפה טבעית."""
+    """מנרמל טקסט עברי לחיפוש (מוסר ניקוד, סמלים, מאחד רווחים וכו')."""
     if not s:
         return ""
-    # ... כאן נכנס הקוד המלא של normalize_he ...
     s = unicodedata.normalize("NFC", s)
     s = re.sub(r"[\u200e\u200f]", "", s)
     s = re.sub(r"[^\w\s\u0590-\u05FF]", " ", s)
@@ -78,38 +79,64 @@ def normalize_he(s: str) -> str:
     return s
 
 def parse_faq_new(text: str) -> List[FAQItem]:
-    """מפרק את הקובץ לפי מבנה שאלה/ניסוחים/תשובה"""
+    """מפרק את קובץ ה-FAQ לפי מבנה שאלה/ניסוחים/תשובה."""
     items = []
     blocks = re.split(r"(?=שאלה\s*:)", text)
     for b in blocks:
         b = b.strip()
         if not b:
             continue
-        # ... כאן נכנס קוד הפארסינג המלא שלך ...
+        
         q_match = re.search(r"שאלה\s*:\s*(.+)", b)
-        a_match = re.search(r"(?s)תשובה\s*:\s*(.+?)(?:\nהוראה\s*:|\Z)", b)
+        a_match = re.search(r"(?s)תשובה\s*:\s*(.+?)(?:\nניסוחים דומים\s*:|\Z)", b)
         v_match = re.search(r"(?s)ניסוחים דומים\s*:\s*(.+?)(?:\nתשובה\s*:|\Z)", b)
-
+        
         question = q_match.group(1).strip() if q_match else ""
-        answer = a_match.group(1).strip() if a_match else ""
-        variants = []
+        answer = a_match.group(1).strip() if a_match and not v_match else "" # Added logic to prevent mixup
+        
+        if not a_match and not v_match:
+             a_match = re.search(r"(?s)תשובה\s*:\s*(.+)", b) # Fallback for no variants
+             answer = a_match.group(1).strip() if a_match else ""
 
         if v_match:
+            # Need to re-search answer if variants were found first
+            a_match = re.search(r"(?s)תשובה\s*:\s*(.+)", b)
+            answer = a_match.group(1).strip() if a_match else ""
+        
+        variants = []
+        if v_match:
             raw = v_match.group(1)
+            # מפרק ניסוחים דומים שמופיעים בשורות נפרדות
             variants = [s.strip(" -\t") for s in raw.split("\n") if s.strip()]
 
         items.append(FAQItem(question, variants, answer))
     return items
 
+def format_answer_for_html(text: str) -> str:
+    """
+    (פותר בעיות 2 ו-3) מעבד טקסט גולמי לתצוגת HTML:
+    1. מחליף מעברי שורה ב-<br>.
+    2. מדגיש טקסט בתוך סוגריים מרובעים (כגון [קישורים] או [שמות טפסים]) עם ספאן.
+    """
+    
+    # 1. טיפול במעברי שורה: החלפת \n ב-<br> (פתרון בעיה 2)
+    formatted_text = text.replace('\n', '<br>')
+    
+    # 2. טיפול בטקסט בתוך סוגריים מרובעות (פתרון בעיה 3)
+    # מחליף [טקסט] ב- <span class="highlight">טקסט</span>
+    formatted_text = re.sub(r'\[([^\]]+)\]', r'<span class="highlight">\1</span>', formatted_text)
+    
+    # 3. טיפול בכותרת המטא-דאטה שמופיעה בתחתית התשובה
+    formatted_text = formatted_text.replace("--- מטא דאטה ---", "<hr><code>--- מטא דאטה ---</code>")
+
+    return formatted_text
+
+
 def search_faq(query: str) -> Dict[str, Any]:
-    """
-    מבצע חיפוש פאזי וסמנטי. 
-    מחזיר מילון עם התשובה והשאלות הקשורות.
-    """
+    """מבצע חיפוש פאזי וסמנטי ומחזיר את התוצאה הטובה ביותר."""
     global faq_store, faq_items, embeddings_ready, embeddings
     nq = normalize_he(query)
 
-    # ... כל לוגיקת החיפוש הפאזי, זיהוי כוונה ו-Embeddings ...
     verbs = {
         "add": ["הוסף", "להוסיף", "הוספה", "מוסיף", "מוסיפים", "לצרף", "צירוף", "פתיחה", "פתיחת", "רישום", "להירשם"],
         "delete": ["מחק", "מחיקה", "להסיר", "הסר", "הסרה", "ביטול", "לבטל", "סגור", "לסגור", "ביטול משתמש"],
@@ -151,7 +178,12 @@ def search_faq(query: str) -> Dict[str, Any]:
     # Embeddings (רק אם טעינה הצליחה)
     # ============================
     if embeddings_ready and faq_store:
-        hits = faq_store.similarity_search_with_score(nq, k=8)
+        try:
+            hits = faq_store.similarity_search_with_score(nq, k=8)
+        except Exception as e:
+            print(f"Error during similarity search: {e}")
+            hits = []
+
         key_words = ["יפוי", "כוח", "הרשאה", "ייצוג", "מייצג", "מעסיק", "מבוטח"]
         boosted_hits = []
 
@@ -162,7 +194,7 @@ def search_faq(query: str) -> Dict[str, Any]:
 
             for kw in key_words:
                 if kw in nq and kw in text_norm:
-                    score -= 0.15
+                    score -= 0.15 # Boosting relevant results
             boosted_hits.append((doc, score))
 
         boosted_hits.sort(key=lambda x: x[1])
@@ -174,10 +206,11 @@ def search_faq(query: str) -> Dict[str, Any]:
 
         if best_fuzzy_score >= 55:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-        elif boosted_hits:
+        elif boosted_hits and best_embed_score <= 1.2:
             result_item = copy.deepcopy(faq_items[boosted_hits[0][0].metadata["idx"]])
-
+            
         if result_item:
+            # אוספים שאלות דומות מה-Embeddings
             similar_questions = [
                 faq_items[d.metadata["idx"]].question
                 for d, s in boosted_hits[1:4]
@@ -194,17 +227,18 @@ def search_faq(query: str) -> Dict[str, Any]:
     # עיצוב התוצאה הסופית
     answer_text = result_item.answer.strip()
     
-    # הוספת כותרות מטא דאטה לשם בדיקה (כדי שתוכל לראות מה זוהה)
+    # הוספת כותרת מטא דאטה
     answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
     
+    # עיבוד התשובה ל-HTML והוספתה למילון התוצאה
     return {
         "success": True, 
-        "answer": answer_text,
+        "answer_html": format_answer_for_html(answer_text), # מעביר את התשובה המעוצבת
         "similar_questions": similar_questions
     }
 
 # ============================================
-# טעינה ראשונית של המודלים (פונקציה רצה פעם אחת!)
+# טעינה ראשונית של המודלים (רצה פעם אחת בעת עליית השרת)
 # ============================================
 
 def load_initial_data():
@@ -229,6 +263,7 @@ def load_initial_data():
     # 3. יצירת Embeddings ו-FAISS
     if openai_api_key and faq_items:
         try:
+            # שימוש ב-langchain_openai.OpenAIEmbeddings
             embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=openai_api_key)
             docs = [Document(page_content=" | ".join([item.question] + item.variants), metadata={"idx": i})
                     for i, item in enumerate(faq_items)]
@@ -239,7 +274,7 @@ def load_initial_data():
             print(f"❌ שגיאה: טעינת FAISS/Embeddings נכשלה: {e}. רץ רק במצב פאזי.")
             embeddings_ready = False
 
-# הרצת הטעינה פעם אחת לפני הניתובים
+# הרצת הטעינה פעם אחת בעת עליית השרת
 with app.app_context():
     load_initial_data()
 
@@ -250,21 +285,19 @@ with app.app_context():
 @app.route('/')
 def index():
     # ניתוב לדף הבית - מציג את תבנית HTML
-    
-    # מעביר את רשימת השאלות הנפוצות הקבועה לתבנית Jinja2
     return render_template('index.html', popular_questions=POPULAR_FAQ_LIST)
 
 @app.route('/search', methods=['POST'])
 def search():
-    # ניתוב לטיפול בבקשות חיפוש באמצעות AJAX / JavaScript
+    # ניתוב לטיפול בבקשות חיפוש באמצעות AJAX
     data = request.get_json()
     query = data.get('query', '')
     
     if not query:
-        return jsonify({"success": False, "answer": "שאילתה ריקה."})
+        return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
     
     # הפעלת לוגיקת החיפוש
     result = search_faq(query)
     
-    # החזרת התוצאה כ-JSON
+    # החזרת התוצאה כ-JSON (עם המפתח החדש answer_html)
     return jsonify(result)
