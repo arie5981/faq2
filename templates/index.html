@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>עוזר שאלות נפוצות - אתר מייצגים</title>
-    <!-- קישור לקובץ CSS סטטי -->
+    <!-- קישור לקובץ CSS סטטי - חשוב שיהיה בנתיב static/style.css -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script>
         // פונקציה לבדיקת הטעינה
@@ -15,12 +15,14 @@
 </head>
 <body>
     <div class="header-bar">
-        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" class="header-logo">
+        <!-- נניח שהלוגו קיים בנתיב זה, אחרת נראה תמונה חסרה -->
+        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" class="header-logo" onerror="this.onerror=null; this.src='https://placehold.co/40x40/0070a7/ffffff?text=BTL'">
         <h1 class="header-title">עוזר שאלות נפוצות</h1>
     </div>
 
+    <!-- עוטף את שטח הצ'אט ושדה הקלט -->
     <div class="container">
-        <!-- הצגת השאלות הנפוצות באמצעות Jinja2 -->
+        <!-- עמודת שאלות נפוצות -->
         <div class="faq-container">
             <h2>שאלות נפוצות:</h2>
             <ul id="faq-list">
@@ -33,41 +35,82 @@
                 {% endfor %}
             </ul>
         </div>
-
-        <!-- אזור היסטוריית הצ'אט (פותר בעיה 1) -->
-        <div id="chat-history">
-            <!-- כאן יופיעו בועות השיחה -->
-            <div class="chat-item assistant-text welcome-message">
-                <strong>ברוכים הבאים!</strong> אנא הזינו שאלה לגבי אתר מייצגים.
+        
+        <!-- עמודת צ'אט ראשית -->
+        <div class="chat-area">
+             <!-- אזור היסטוריית הצ'אט (מטופל על ידי flex-direction: column-reverse ב-CSS) -->
+            <div id="chat-history">
+                <!-- כאן יופיעו בועות השיחה -->
+                <div class="chat-item assistant-text welcome-message">
+                    <strong>ברוכים הבאים!</strong> אנא הזינו שאלה לגבי אתר מייצגים.
+                </div>
             </div>
-        </div>
 
-        <!-- אזור החיפוש הראשי -->
-        <div class="input-area">
-            <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר">
-            <button id="submit-btn" style="display:none;">שלח</button>
+            <!-- אזור החיפוש הראשי -->
+            <div class="input-area">
+                <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר">
+            </div>
         </div>
     </div>
 
     <script>
         // ============================================
-        // JavaScript לטיפול ב-AJAX וקליקים (פותר בעיה 1)
+        // JavaScript לטיפול ב-AJAX וקליקים (פותר בעיה 4 - הקישורים)
         // ============================================
+        
+        /**
+         * 4. פתרון לבעיה: קישורים לא עובדים. פונקציה להמרת טקסט קישור ל-HTML.
+         * מחפשת תבניות כמו: [טופס הוספת משתמשים "בל 68"] בתוך טקסט התשובה
+         * ומחליפה אותן בתגית <a> תקינה.
+         */
+        function replaceLinks(text) {
+             // תבנית: [כותרת הקישור "מזהה דף"]
+             // הביטוי הרגולרי מחפש סוגריים מרובעות המכילות טקסט, רווחים ומירכאות כפולות/מעוקלות
+             const fallbackLinkRegex = /\[(.+?)\s*["“](.+?)["”]\s*\]/g;
+             
+             let result = text.replace(fallbackLinkRegex, (match, title, identifier) => {
+                 // title: כותרת הקישור (טופס הוספת משתמשים)
+                 // identifier: המזהה הפנימי (בל 68) - ישמש ככותרת/ID
+                 
+                 // מחזיר תג A עם מחלקה internal-link לעיצוב אדום/מודגש
+                 return `<a href="#" class="internal-link" title="הפניה לדף ${identifier}" data-identifier="${identifier}">${title}</a>`;
+             });
+             
+             return result;
+        }
+
+
         document.addEventListener('DOMContentLoaded', function() {
             const queryInput = document.getElementById('query-input');
             const chatHistory = document.getElementById('chat-history');
             const faqList = document.getElementById('faq-list');
+            
+            // פונקציית גלילה אוטומטית 
+            function scrollToBottom() {
+                // גלילה עם קצת השהייה כדי לתת ל-DOM להתעדכן
+                setTimeout(() => {
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                }, 50); 
+            }
 
             function performSearch(query) {
                 if (!query) return;
                 
                 // 1. הוספת בועת שאלה של המשתמש להיסטוריה
-                chatHistory.innerHTML += `<div class="chat-item user-bubble"><strong>את/ה:</strong> ${query}</div>`;
+                const userBubble = document.createElement('div');
+                userBubble.className = 'chat-item user-bubble';
+                userBubble.innerHTML = `<strong>את/ה:</strong> ${query}`;
+                chatHistory.prepend(userBubble); // הוספה לראש, יופיע למטה בגלל reverse
                 
                 // 2. הוספת הודעת טעינה
                 const loadingId = `loading-${Date.now()}`;
-                chatHistory.innerHTML += `<div id="${loadingId}" class="chat-item assistant-text loading-message">... מחפש תשובה ...</div>`;
-                chatHistory.scrollTop = chatHistory.scrollHeight; // גלילה לתחתית
+                const loadingElement = document.createElement('div');
+                loadingElement.id = loadingId;
+                loadingElement.className = 'chat-item assistant-text loading-message';
+                loadingElement.innerHTML = '... מחפש תשובה ...';
+                chatHistory.prepend(loadingElement); // הוספה לראש, יופיע מעל בועת המשתמש
+
+                scrollToBottom(); 
 
                 // 3. שליחת בקשת AJAX לשרת Flask
                 fetch('/search', {
@@ -77,25 +120,35 @@
                     },
                     body: JSON.stringify({ query: query })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     // הסרת הודעת הטעינה
-                    const loadingElement = document.getElementById(loadingId);
-                    if (loadingElement) loadingElement.remove();
+                    const loadingElementToRemove = document.getElementById(loadingId);
+                    if (loadingElementToRemove) loadingElementToRemove.remove();
                     
-                    let content = '';
-
+                    let contentElement = document.createElement('div');
+                    contentElement.className = 'chat-item assistant-text';
+                    
                     if (data.success) {
-                         // קוראים את answer_html המעוצב מהשרת (פותר בעיות 2 ו-3)
-                        content = `<div class="chat-item assistant-text"><strong>עוזר:</strong><br>${data.answer_html}</div>`;
+                         // קוראים את answer_html המעוצב מהשרת
+                        let answerHtml = data.answer_html;
+                        // 4. טיפול בקישורים (פותר בעיה 4)
+                        answerHtml = replaceLinks(answerHtml); 
+                        contentElement.innerHTML = `<strong>עוזר:</strong><br>${answerHtml}`;
                     } else {
-                        content = `<div class="chat-item assistant-text error-message"><strong>עוזר:</strong><br>${data.answer_html}</div>`;
+                        contentElement.className += ' error-message';
+                        contentElement.innerHTML = `<strong>עוזר:</strong><br>${data.answer_html}`;
                     }
-
-                    // הוספת התשובה המעוצבת להיסטוריה
-                    chatHistory.innerHTML += content; 
                     
-                    // טיפול בשאלות קשורות (אם קיימות)
+                    // הוספת התשובה המעוצבת להיסטוריה
+                    chatHistory.prepend(contentElement);
+                    
+                    // טיפול בשאלות קשורות (אם קיימות) (פותר בעיה 3)
                     if (data.similar_questions && data.similar_questions.length > 0) {
                         let relatedHtml = '<div class="related-questions-box">';
                         relatedHtml += '<h4>שאלות קשורות שעשויות לעניין:</h4><ul>';
@@ -103,22 +156,30 @@
                             relatedHtml += `<li>${index + 1}. <span class="related-q" data-question="${q}">${q}</span></li>`;
                         });
                         relatedHtml += '</ul></div>';
-                        chatHistory.innerHTML += relatedHtml;
+                        
+                        const relatedElement = document.createElement('div');
+                        relatedElement.innerHTML = relatedHtml;
+                        relatedElement.className = 'chat-item related-item'; // מחלקה חדשה שתעזור ב-CSS
+                        chatHistory.prepend(relatedElement);
                     }
 
-                    // גלילה אוטומטית בסיום התשובה
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                    scrollToBottom();
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    const loadingElement = document.getElementById(loadingId);
-                    if (loadingElement) loadingElement.remove();
-                    chatHistory.innerHTML += `<div class="chat-item assistant-text error-message"><strong>שגיאה:</strong> אירעה שגיאה בחיבור לשרת או ל-OpenAI.</div>`;
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                    const loadingElementToRemove = document.getElementById(loadingId);
+                    if (loadingElementToRemove) loadingElementToRemove.remove();
+                    
+                    const errorElement = document.createElement('div');
+                    errorElement.className = 'chat-item assistant-text error-message';
+                    errorElement.innerHTML = `<strong>שגיאה:</strong> אירעה שגיאה בחיבור לשרת או בבקשת ה-AJAX. פרטים: ${error.message}`;
+                    chatHistory.prepend(errorElement);
+                    
+                    scrollToBottom();
                 });
             }
 
-            // 4. אירוע שליחה בכפתור אנטר
+            // 5. אירוע שליחה בכפתור אנטר
             queryInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     performSearch(queryInput.value);
@@ -126,7 +187,7 @@
                 }
             });
 
-            // 5. אירוע קליק על שאלות נפוצות
+            // 6. אירוע קליק על שאלות נפוצות
             faqList.addEventListener('click', function(e) {
                 if (e.target.classList.contains('answer-btn')) {
                     const q = e.target.getAttribute('data-question');
@@ -134,11 +195,26 @@
                 }
             });
 
-            // 6. אירוע קליק על שאלות קשורות
+            // 7. אירוע קליק על שאלות קשורות וקישורי טופס
              chatHistory.addEventListener('click', function(e) {
                 if (e.target.classList.contains('related-q')) {
                     const q = e.target.getAttribute('data-question');
                     performSearch(q);
+                }
+                // טיפול בקליק על הקישורים הפנימיים שנוצרו על ידי JS (בעיה 4)
+                if (e.target.classList.contains('internal-link')) {
+                    e.preventDefault(); // מונע ניווט
+                    const identifier = e.target.getAttribute('data-identifier');
+                    
+                    // הדגמה: הוספת הודעה לממשק במקום alert
+                    const message = `קישור פנימי לטופס/מסמך "${e.target.textContent.trim()}" (מזהה: ${identifier}). יש צורך להטמיע את לוגיקת הניווט המתאימה כאן.`;
+                    
+                    const infoElement = document.createElement('div');
+                    infoElement.className = 'chat-item assistant-text welcome-message';
+                    infoElement.style.marginTop = '15px';
+                    infoElement.innerHTML = `<strong>הודעה:</strong> ${message}`;
+                    chatHistory.prepend(infoElement);
+                    scrollToBottom();
                 }
             });
         });
