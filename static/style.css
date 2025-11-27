@@ -1,61 +1,79 @@
 /* -*- coding: utf-8 -*- */
-body {
-    direction: rtl;
-    text-align: right;
-    font-family: 'Rubik', Arial, sans-serif;
+
+/* ייבוא פונט עברי */
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap');
+
+/* ================================================= */
+/* 1. תיקון: גובה הדף המלא (בעיה 1) ופריסת Flexbox */
+/* ================================================= */
+html, body {
+    height: 100%;
     margin: 0;
     padding: 0;
-    background-color: #f0f2f5;
-    color: #333;
+    font-family: 'Heebo', sans-serif;
+    background-color: #f7f9fc; /* רקע בהיר */
+    direction: rtl;
+    text-align: right;
+}
+
+body {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
 }
 
-.container {
-    width: 90%;
-    max-width: 800px;
-    padding: 20px;
-    background-color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    border-radius: 12px;
-    margin-top: 20px;
-    margin-bottom: 40px;
-}
-
-/* שורת כותרת עליונה */
 .header-bar {
-    width: 100%;
-    background-color: #007bff; /* כחול של הביטוח הלאומי/ממשלה */
+    background-color: #0070a7; /* כחול הביטוח הלאומי */
     color: white;
-    padding: 1rem 0;
-    text-align: center;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 1rem 2rem;
     display: flex;
-    justify-content: center;
     align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .header-logo {
-    height: 40px; /* גודל לוגו */
-    margin-left: 15px;
-    border-radius: 4px;
+    height: 40px;
+    margin-inline-end: 1rem;
 }
 
 .header-title {
-    margin: 0;
     font-size: 1.5rem;
-    font-weight: 500;
+    font-weight: 700;
+    margin: 0;
 }
 
-/* ================================== */
-/* אזור שאלות נפוצות */
-/* ================================== */
+.container {
+    display: flex;
+    flex: 1; /* תופס את כל הגובה הנותר */
+    padding: 1rem 2rem;
+    gap: 20px;
+    overflow: hidden; 
+    width: 100%;
+    max-width: 1200px; /* רוחב מקסימלי נוח */
+    margin: 0 auto;
+}
+
+/* ================================================= */
+/* עמודת שאלות נפוצות */
+/* ================================================= */
 .faq-container {
-    padding: 10px 0;
-    border-bottom: 2px solid #eee;
-    margin-bottom: 20px;
+    width: 300px;
+    min-width: 250px;
+    background-color: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    height: fit-content;
+    max-height: 100%;
+    overflow-y: auto;
+    flex-shrink: 0; /* מונע התכווצות */
+}
+
+.faq-container h2 {
+    font-size: 1.3rem;
+    border-bottom: 2px solid #0070a7;
+    padding-bottom: 5px;
+    margin-top: 0;
+    margin-bottom: 15px;
 }
 
 #faq-list {
@@ -64,130 +82,177 @@ body {
 }
 
 #faq-list li {
-    padding: 8px 0;
-    border-bottom: 1px dotted #ccc;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.95rem;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed #e0e0e0;
+    line-height: 1.4;
 }
 
 .answer-btn {
-    height: 30px; 
-    line-height: 1;
-    padding: 4px 12px; 
-    font-size: 0.85rem;
-    border-radius: 6px;
-    background-color: #17a2b8; /* טורקיז */
+    background-color: #0070a7;
     color: white;
     border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.2s;
-    flex-shrink: 0; /* מונע התכווצות */
+    font-weight: 700;
+    white-space: nowrap;
+    font-size: 0.9rem;
 }
 
 .answer-btn:hover {
-    background-color: #138496;
+    background-color: #005a8a;
 }
 
-/* ================================== */
-/* אזור הצ'אט (פותר בעיה 1) */
-/* ================================== */
-
-#chat-history {
-    max-height: 450px; /* גובה מקסימלי קבוע */
-    overflow-y: auto; /* מאפשר גלילה אנכית */
-    padding: 15px;
-    border: 1px solid #ddd;
+/* ================================================= */
+/* אזור הצ'אט והקלט */
+/* ================================================= */
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: white;
     border-radius: 8px;
-    background-color: #fbfbfb;
-    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden; 
 }
 
-.chat-item {
-    margin-bottom: 15px;
+/* 2. תיקון: סדר התשובות הפוך (בעיה 2) */
+#chat-history {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    /* התיקון הקריטי: מציג את הפריטים בסדר הפוך, כך שחדשים מופיעים בתחתית, מעל שורת הקלט */
+    display: flex;
+    flex-direction: column-reverse; 
+    gap: 10px;
+    padding-bottom: 0;
+}
+
+/* מוודא שרכיבי הצ'אט לא מתכווצים */
+#chat-history > * {
+    flex-shrink: 0;
+}
+
+.input-area {
+    display: flex;
+    padding: 15px;
+    border-top: 1px solid #e0e0e0;
+}
+
+#query-input {
+    flex: 1;
     padding: 10px 15px;
-    border-radius: 18px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    font-size: 1rem;
+    margin-inline-end: 10px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* ================================================= */
+/* עיצוב בועות הצ'אט */
+/* ================================================= */
+.chat-item {
     max-width: 85%;
-    clear: both;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin: 5px 0;
     line-height: 1.6;
-    font-size: 0.95rem;
 }
 
 /* בועת שאלה (משתמש) */
 .user-bubble {
-    background-color: #e6f3ff; /* כחול בהיר */
-    float: right;
-    border-top-left-radius: 18px;
-    border-top-right-radius: 4px;
-    border-bottom-left-radius: 18px;
-    border-bottom-right-radius: 18px;
+    background-color: #0070a7;
+    color: white;
+    align-self: flex-end; 
+    margin-inline-start: auto;
+    border-top-right-radius: 0; 
 }
 
 /* טקסט תשובה (מערכת) */
 .assistant-text {
-    background-color: #e0f2fe; /* כחול תכלת עדין */
-    float: left;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 18px;
-    border-bottom-left-radius: 18px;
-    border-bottom-right-radius: 18px;
-    text-align: right;
+    background-color: #e6f7ff;
+    color: #333;
+    align-self: flex-start;
+    margin-inline-end: auto;
+    border: 1px solid #b3e0ff;
+    border-top-left-radius: 0;
 }
 
 .welcome-message {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    align-self: center;
     text-align: center;
-    background-color: #fffbe6;
-    border: 1px solid #ffe0b2;
-    float: none;
-    max-width: 100%;
+    font-size: 1.1rem;
+    width: 90%;
+    margin-bottom: 15px;
 }
 
 .loading-message {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
     font-style: italic;
-    color: #6c757d;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+    align-self: flex-start;
+    width: fit-content;
 }
 
-/* ================================== */
-/* הדגשת טקסט מיוחד (פותר בעיה 3) */
-/* ================================== */
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    align-self: flex-start;
+}
+
+/* הדגשה כללית (כמו שמות טפסים) */
 .highlight {
     font-weight: bold;
-    color: #dc3545; /* צבע אדום להדגשת שם טופס או קישור */
-    background-color: #fff3f5; 
-    padding: 2px 4px;
+    color: #0070a7; 
+    background-color: #f0f8ff; 
+    padding: 1px 4px;
     border-radius: 4px;
-    border: 1px solid #f5c6cb;
 }
 
-/* מעבר שורה בתשובה (פותר בעיה 2) */
-.assistant-text br {
-    display: block; /* מוודא שמעבר השורה פועל */
-    content: " ";
-    margin-top: 5px; /* מוסיף מעט מרווח בין השורות */
+/* ================================================= */
+/* שאלות קשורות וקישורים (בעיות 3 ו-4) */
+/* ================================================= */
+
+/* מחלקה עבור כל בלוק הנתונים של שאלות קשורות */
+.related-item {
+    /* מוודא שהוא יושב בשמאל, ברוחב מלא ומתחת לתשובה (בגלל column-reverse) */
+    align-self: flex-start; 
+    margin-inline-end: auto;
+    max-width: 100%; 
+    padding: 0; 
+    background: none; 
+    border: none;
+    box-shadow: none;
 }
 
-/* ================================== */
-/* שאלות קשורות וקלט */
-/* ================================== */
-
+/* תיבת השאלות הקשורות בפנים (בעיה 3) */
 .related-questions-box {
-    border-top: 1px dashed #ccc;
-    padding-top: 10px;
-    margin-top: 10px;
-    background-color: #f0fff0;
+    background-color: #f0f0f0;
     padding: 15px;
-    border-radius: 8px;
-    float: none;
-    max-width: 100%;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    width: 100%; 
+    box-sizing: border-box;
+    max-width: 700px; /* הגבלה כדי שלא יהיה רחב מדי */
 }
 
 .related-questions-box h4 {
     margin-top: 0;
+    margin-bottom: 8px;
     font-size: 1rem;
     color: #28a745; /* ירוק */
+    font-weight: 700;
 }
 
 .related-questions-box ul {
@@ -196,34 +261,69 @@ body {
     margin: 0;
 }
 
-.related-questions-box li {
-    margin-bottom: 5px;
-}
-
 .related-q {
-    color: #007bff;
-    text-decoration: none;
+    color: #0070a7;
+    text-decoration: underline;
     cursor: pointer;
     font-weight: 500;
     transition: color 0.2s;
 }
 
 .related-q:hover {
-    color: #0056b3;
+    color: #005a8a;
+}
+
+/* 4. תיקון: עיצוב קישורים פנימיים שנוצרו על ידי JS (בעיה 4 - אדום מודגש) */
+.assistant-text .internal-link {
+    color: #dc3545; /* אדום */
     text-decoration: underline;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
 }
 
-.input-area {
-    display: flex;
-    margin-top: 20px;
+.assistant-text .internal-link:hover {
+    color: #b02a37;
 }
 
-#query-input {
-    flex-grow: 1;
-    padding: 12px;
-    box-sizing: border-box;
-    border: 1px solid #ced4da;
-    border-radius: 8px;
-    font-size: 1rem;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+/* סגנון מטא דאטה */
+.assistant-text hr {
+    border: 0;
+    border-top: 1px dashed #ccc;
+    margin: 10px 0;
+}
+
+.assistant-text code {
+    font-size: 0.8rem;
+    color: #6c757d;
+    display: block;
+    white-space: pre-wrap;
+    text-align: left;
+}
+
+
+/* ================================================= */
+/* רספונסיביות */
+/* ================================================= */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .faq-container {
+        width: 100%;
+        order: -1; /* מעביר את ה-FAQ למעלה במובייל */
+        min-width: unset;
+        max-height: 250px; /* מגביל גובה במובייל */
+    }
+
+    .header-bar {
+        padding: 10px 15px;
+    }
+
+    .chat-area {
+        height: 70vh; /* נותן גובה קבוע יחסית לאזור הצ'אט במובייל */
+    }
 }
