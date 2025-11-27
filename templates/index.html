@@ -3,50 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>תמיכה לאתר מייצגים - Flask/Render</title>
+    <title>עוזר שאלות נפוצות - אתר מייצגים</title>
+    <!-- קישור לקובץ CSS סטטי -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        // פונקציה לבדיקת הטעינה
+        window.onload = function() {
+            console.log("Page loaded successfully.");
+        };
+    </script>
 </head>
 <body>
     <div class="header-bar">
-        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" class="header-logo" style="height:48px;">
+        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" class="header-logo">
+        <h1 class="header-title">עוזר שאלות נפוצות</h1>
+    </div>
+
+    <div class="container">
+        <!-- הצגת השאלות הנפוצות באמצעות Jinja2 -->
+        <div class="faq-container">
+            <h2>שאלות נפוצות:</h2>
+            <ul id="faq-list">
+                {% for q in popular_questions %}
+                    <li>
+                        {{ loop.index }}. 
+                        <span class="question-text">{{ q }}</span> 
+                        <button class="answer-btn" data-question="{{ q }}">לתשובה</button>
+                    </li>
+                {% endfor %}
+            </ul>
         </div>
 
-    <h1>עוזר שאלות נפוצות</h1>
+        <!-- אזור היסטוריית הצ'אט (פותר בעיה 1) -->
+        <div id="chat-history">
+            <!-- כאן יופיעו בועות השיחה -->
+            <div class="chat-item assistant-text welcome-message">
+                <strong>ברוכים הבאים!</strong> אנא הזינו שאלה לגבי אתר מייצגים.
+            </div>
+        </div>
 
-    <h2>שאלות נפוצות:</h2>
-    <ul id="faq-list">
-        {% for q in popular_questions %}
-            <li>
-                {{ loop.index }}. 
-                <span class="question-text">{{ q }}</span> 
-                <button class="answer-btn" data-question="{{ q }}">לתשובה</button>
-            </li>
-        {% endfor %}
-    </ul>
-
-    <h2>שאלה חדשה:</h2>
-    <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר">
-    <button id="submit-btn" style="display:none;">שלח</button>
-
-    <div id="response-area"></div>
+        <!-- אזור החיפוש הראשי -->
+        <div class="input-area">
+            <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר">
+            <button id="submit-btn" style="display:none;">שלח</button>
+        </div>
+    </div>
 
     <script>
         // ============================================
-        // JavaScript לטיפול ב-AJAX וקליקים
+        // JavaScript לטיפול ב-AJAX וקליקים (פותר בעיה 1)
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
             const queryInput = document.getElementById('query-input');
-            const responseArea = document.getElementById('response-area');
+            const chatHistory = document.getElementById('chat-history');
             const faqList = document.getElementById('faq-list');
 
             function performSearch(query) {
                 if (!query) return;
-
-                // 1. הצגת השאלה של המשתמש
-                responseArea.innerHTML = `<div class="user-bubble"><strong>שאלה:</strong> ${query}</div>`;
-                responseArea.innerHTML += `<div class="assistant-text">... מחפש תשובה ...</div>`;
                 
-                // 2. שליחת בקשת AJAX לשרת Flask
+                // 1. הוספת בועת שאלה של המשתמש להיסטוריה
+                chatHistory.innerHTML += `<div class="chat-item user-bubble"><strong>את/ה:</strong> ${query}</div>`;
+                
+                // 2. הוספת הודעת טעינה
+                const loadingId = `loading-${Date.now()}`;
+                chatHistory.innerHTML += `<div id="${loadingId}" class="chat-item assistant-text loading-message">... מחפש תשובה ...</div>`;
+                chatHistory.scrollTop = chatHistory.scrollHeight; // גלילה לתחתית
+
+                // 3. שליחת בקשת AJAX לשרת Flask
                 fetch('/search', {
                     method: 'POST',
                     headers: {
@@ -56,27 +79,46 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    responseArea.innerHTML = `<div class="user-bubble"><strong>שאלה:</strong> ${query}</div>`;
+                    // הסרת הודעת הטעינה
+                    const loadingElement = document.getElementById(loadingId);
+                    if (loadingElement) loadingElement.remove();
                     
-                    let content = `<div class="assistant-text"><strong>תשובה:</strong><br>${data.answer}</div>`;
+                    let content = '';
 
-                    if (data.similar_questions && data.similar_questions.length > 0) {
-                        content += '<h4>שאלות קשורות:</h4><ul>';
-                        data.similar_questions.forEach((q, index) => {
-                            content += `<li>${index + 1}. <span class="related-q" data-question="${q}">${q}</span></li>`;
-                        });
-                        content += '</ul>';
+                    if (data.success) {
+                         // קוראים את answer_html המעוצב מהשרת (פותר בעיות 2 ו-3)
+                        content = `<div class="chat-item assistant-text"><strong>עוזר:</strong><br>${data.answer_html}</div>`;
+                    } else {
+                        content = `<div class="chat-item assistant-text error-message"><strong>עוזר:</strong><br>${data.answer_html}</div>`;
                     }
 
-                    responseArea.innerHTML += content;
+                    // הוספת התשובה המעוצבת להיסטוריה
+                    chatHistory.innerHTML += content; 
+                    
+                    // טיפול בשאלות קשורות (אם קיימות)
+                    if (data.similar_questions && data.similar_questions.length > 0) {
+                        let relatedHtml = '<div class="related-questions-box">';
+                        relatedHtml += '<h4>שאלות קשורות שעשויות לעניין:</h4><ul>';
+                        data.similar_questions.forEach((q, index) => {
+                            relatedHtml += `<li>${index + 1}. <span class="related-q" data-question="${q}">${q}</span></li>`;
+                        });
+                        relatedHtml += '</ul></div>';
+                        chatHistory.innerHTML += relatedHtml;
+                    }
+
+                    // גלילה אוטומטית בסיום התשובה
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    responseArea.innerHTML = `<div class="assistant-text" style="color: red;">אירעה שגיאה בחיבור לשרת או ל-OpenAI.</div>`;
+                    const loadingElement = document.getElementById(loadingId);
+                    if (loadingElement) loadingElement.remove();
+                    chatHistory.innerHTML += `<div class="chat-item assistant-text error-message"><strong>שגיאה:</strong> אירעה שגיאה בחיבור לשרת או ל-OpenAI.</div>`;
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
                 });
             }
 
-            // 3. אירוע שליחה בכפתור אנטר
+            // 4. אירוע שליחה בכפתור אנטר
             queryInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     performSearch(queryInput.value);
@@ -84,7 +126,7 @@
                 }
             });
 
-            // 4. אירוע קליק על שאלות נפוצות
+            // 5. אירוע קליק על שאלות נפוצות
             faqList.addEventListener('click', function(e) {
                 if (e.target.classList.contains('answer-btn')) {
                     const q = e.target.getAttribute('data-question');
@@ -92,8 +134,8 @@
                 }
             });
 
-            // 5. אירוע קליק על שאלות קשורות
-             responseArea.addEventListener('click', function(e) {
+            // 6. אירוע קליק על שאלות קשורות
+             chatHistory.addEventListener('click', function(e) {
                 if (e.target.classList.contains('related-q')) {
                     const q = e.target.getAttribute('data-question');
                     performSearch(q);
