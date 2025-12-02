@@ -4,51 +4,138 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>עוזר שאלות נפוצות - אתר מייצגים</title>
-    <!-- קישור לקובץ CSS סטטי - חשוב שיהיה בנתיב static/style.css -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- טעינת Tailwind CSS באמצעות CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* הגדרות בסיסיות לטיפול בכוון הטקסט ובגלילה */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+
+        /* הגדרות גלילה לצ'אט - חשוב ל-direction: rtl */
+        #chat-history {
+            display: flex;
+            flex-direction: column-reverse; /* הופך את סדר הופעת הבועות (החדשות למטה) */
+            overflow-y: auto;
+            flex-grow: 1; /* תופס את כל השטח הפנוי */
+            padding: 1rem;
+            max-height: calc(100vh - 18rem); /* גובה מקסימלי עם מקום לכותרת ולשדה קלט */
+            min-height: 200px;
+        }
+
+        /* עיצוב בועות הצ'אט */
+        .chat-item {
+            margin-bottom: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            max-width: 85%;
+            width: fit-content;
+        }
+
+        .user-bubble {
+            background-color: #0070a7; /* כחול הביטוח הלאומי */
+            color: white;
+            align-self: flex-start; /* מיושר לימין בגלל rtl */
+            margin-right: auto;
+        }
+
+        .assistant-text {
+            background-color: #ffffff;
+            border: 1px solid #e0e7ff;
+            color: #1f2937;
+            align-self: flex-end; /* מיושר לשמאל בגלל rtl */
+            margin-left: auto;
+        }
+        
+        /* הודעת טעינה מיוחדת */
+        .loading-message {
+            background-color: #fffbeb;
+            border-color: #fcd34d;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 1; }
+          100% { opacity: 0.6; }
+        }
+
+        /* קישורים פנימיים */
+        .internal-link, .related-q {
+            color: #d94a2b; /* אדום/כתום מודגש */
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        
+        .internal-link:hover, .related-q:hover {
+            opacity: 0.8;
+        }
+
+        /* רספונסיביות - מעבר מטור לשורה בטאבלט ומעלה */
+        @media (min-width: 768px) {
+            .container {
+                display: grid;
+                grid-template-columns: 1fr 2fr; /* FAQ: 1 חלק, Chat: 2 חלקים */
+                gap: 2rem;
+            }
+            #chat-history {
+                max-height: calc(100vh - 10rem); /* גובה מקסימלי שונה לדסקטופ */
+            }
+        }
+        
+    </style>
     <script>
-        // פונקציה לבדיקת הטעינה
-        window.onload = function() {
-            console.log("Page loaded successfully.");
-        };
+        // ... (ה-JavaScript הקיים נשאר זהה)
     </script>
 </head>
-<body>
-    <div class="header-bar">
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- סרגל עליון (Header) -->
+    <div class="header-bar bg-[#0070a7] text-white p-4 flex items-center shadow-lg">
         <!-- נניח שהלוגו קיים בנתיב זה, אחרת נראה תמונה חסרה -->
-        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" class="header-logo" onerror="this.onerror=null; this.src='https://placehold.co/40x40/0070a7/ffffff?text=BTL'">
-        <h1 class="header-title">עוזר שאלות נפוצות</h1>
+        <!-- החלפתי את הלוגו לפלייסהולדר עם צבעים מתאימים -->
+        <img src="{{ url_for('static', filename='logobtl.png') }}" alt="לוגו הביטוח הלאומי" 
+             class="header-logo w-10 h-10 ml-4 rounded-full" 
+             onerror="this.onerror=null; this.src='https://placehold.co/40x40/ffffff/0070a7?text=M'">
+        <h1 class="header-title text-2xl font-bold">עוזר שאלות נפוצות לאתר מייצגים</h1>
     </div>
 
     <!-- עוטף את שטח הצ'אט ושדה הקלט -->
-    <div class="container">
+    <div class="container p-4 md:p-8 max-w-7xl mx-auto">
+        
         <!-- עמודת שאלות נפוצות -->
-        <div class="faq-container">
-            <h2>שאלות נפוצות:</h2>
-            <ul id="faq-list">
+        <div class="faq-container bg-white p-6 rounded-xl shadow-md mb-6 md:mb-0 h-full">
+            <h2 class="text-xl font-semibold mb-4 text-[#0070a7]">שאלות נפוצות:</h2>
+            <ul id="faq-list" class="space-y-3 text-gray-700">
                 {% for q in popular_questions %}
-                    <li>
-                        {{ loop.index }}. 
-                        <span class="question-text">{{ q }}</span> 
-                        <button class="answer-btn" data-question="{{ q }}">לתשובה</button>
+                    <li class="flex items-start">
+                        <span class="font-bold ml-2">{{ loop.index }}.</span>
+                        <div class="flex flex-col flex-grow">
+                            <span class="question-text flex-grow cursor-pointer hover:text-blue-600 transition duration-150">{{ q }}</span>
+                            <button class="answer-btn mt-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 p-1 rounded transition duration-150 w-full" data-question="{{ q }}">לחץ לתשובה</button>
+                        </div>
                     </li>
                 {% endfor %}
             </ul>
         </div>
         
         <!-- עמודת צ'אט ראשית -->
-        <div class="chat-area">
-             <!-- אזור היסטוריית הצ'אט (מטופל על ידי flex-direction: column-reverse ב-CSS) -->
-            <div id="chat-history">
+        <div class="chat-area flex flex-col h-full bg-white p-4 rounded-xl shadow-md">
+            
+            <!-- אזור היסטוריית הצ'אט -->
+            <div id="chat-history" class="border border-gray-200 rounded-lg mb-4 bg-gray-50">
                 <!-- כאן יופיעו בועות השיחה -->
-                <div class="chat-item assistant-text welcome-message">
-                    <strong>ברוכים הבאים!</strong> אנא הזינו שאלה לגבי אתר מייצגים.
+                <div class="chat-item assistant-text welcome-message shadow-sm">
+                    <strong class="text-[#0070a7]">ברוכים הבאים!</strong> אנא הזינו שאלה לגבי אתר מייצגים.
                 </div>
             </div>
 
             <!-- אזור החיפוש הראשי -->
-            <div class="input-area">
-                <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר">
+            <div class="input-area flex mt-auto">
+                <input type="text" id="query-input" placeholder="הקלד שאלה והקש אנטר" class="flex-grow p-3 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-[#0070a7] text-right" style="direction: rtl;">
+                <button onclick="performSearch(document.getElementById('query-input').value); document.getElementById('query-input').value = ''" class="bg-[#0070a7] text-white p-3 rounded-l-lg hover:bg-[#005a8a] transition duration-150">שלח</button>
             </div>
         </div>
     </div>
@@ -89,16 +176,18 @@
             function scrollToBottom() {
                 // גלילה עם קצת השהייה כדי לתת ל-DOM להתעדכן
                 setTimeout(() => {
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                    // גלילה לתחתית (בגלל reverse, זה העליון)
+                    chatHistory.scrollTop = 0; 
                 }, 50); 
             }
 
-            function performSearch(query) {
+            // הפונקציה הראשית לביצוע חיפוש
+            window.performSearch = function(query) { // הפכתי אותה לגלובלית כדי שתעבוד בכפתור השליחה
                 if (!query) return;
                 
                 // 1. הוספת בועת שאלה של המשתמש להיסטוריה
                 const userBubble = document.createElement('div');
-                userBubble.className = 'chat-item user-bubble';
+                userBubble.className = 'chat-item user-bubble shadow-md';
                 userBubble.innerHTML = `<strong>את/ה:</strong> ${query}`;
                 chatHistory.prepend(userBubble); // הוספה לראש, יופיע למטה בגלל reverse
                 
@@ -106,7 +195,7 @@
                 const loadingId = `loading-${Date.now()}`;
                 const loadingElement = document.createElement('div');
                 loadingElement.id = loadingId;
-                loadingElement.className = 'chat-item assistant-text loading-message';
+                loadingElement.className = 'chat-item assistant-text loading-message shadow-md';
                 loadingElement.innerHTML = '... מחפש תשובה ...';
                 chatHistory.prepend(loadingElement); // הוספה לראש, יופיע מעל בועת המשתמש
 
@@ -132,7 +221,7 @@
                     if (loadingElementToRemove) loadingElementToRemove.remove();
                     
                     let contentElement = document.createElement('div');
-                    contentElement.className = 'chat-item assistant-text';
+                    contentElement.className = 'chat-item assistant-text shadow-md';
                     
                     if (data.success) {
                          // קוראים את answer_html המעוצב מהשרת
@@ -141,8 +230,8 @@
                         answerHtml = replaceLinks(answerHtml); 
                         contentElement.innerHTML = `<strong>עוזר:</strong><br>${answerHtml}`;
                     } else {
-                        contentElement.className += ' error-message';
-                        contentElement.innerHTML = `<strong>עוזר:</strong><br>${data.answer_html}`;
+                        contentElement.className += ' bg-red-100 text-red-700 border-red-300 error-message';
+                        contentElement.innerHTML = `<strong>עוזר (שגיאה):</strong><br>${data.answer_html}`;
                     }
                     
                     // הוספת התשובה המעוצבת להיסטוריה
@@ -150,16 +239,16 @@
                     
                     // טיפול בשאלות קשורות (אם קיימות) (פותר בעיה 3)
                     if (data.similar_questions && data.similar_questions.length > 0) {
-                        let relatedHtml = '<div class="related-questions-box">';
-                        relatedHtml += '<h4>שאלות קשורות שעשויות לעניין:</h4><ul>';
+                        let relatedHtml = '<div class="related-questions-box p-3 border-t border-gray-200 mt-2">';
+                        relatedHtml += '<h4 class="font-semibold text-gray-600 mb-2">שאלות קשורות שעשויות לעניין:</h4><ul>';
                         data.similar_questions.forEach((q, index) => {
-                            relatedHtml += `<li>${index + 1}. <span class="related-q" data-question="${q}">${q}</span></li>`;
+                            relatedHtml += `<li class="hover:bg-gray-100 p-1 rounded cursor-pointer transition duration-150">${index + 1}. <span class="related-q" data-question="${q}">${q}</span></li>`;
                         });
                         relatedHtml += '</ul></div>';
                         
                         const relatedElement = document.createElement('div');
                         relatedElement.innerHTML = relatedHtml;
-                        relatedElement.className = 'chat-item related-item'; // מחלקה חדשה שתעזור ב-CSS
+                        relatedElement.className = 'chat-item assistant-text related-item shadow-md'; // מחלקה חדשה שתעזור ב-CSS
                         chatHistory.prepend(relatedElement);
                     }
 
@@ -171,8 +260,8 @@
                     if (loadingElementToRemove) loadingElementToRemove.remove();
                     
                     const errorElement = document.createElement('div');
-                    errorElement.className = 'chat-item assistant-text error-message';
-                    errorElement.innerHTML = `<strong>שגיאה:</strong> אירעה שגיאה בחיבור לשרת או בבקשת ה-AJAX. פרטים: ${error.message}`;
+                    errorElement.className = 'chat-item assistant-text bg-red-100 text-red-700 border-red-300 error-message shadow-md';
+                    errorElement.innerHTML = `<strong>שגיאה:</strong> אירעה שגיאה בחיבור לשרת או בבקשת ה-AJAX. אנא ודא שמפתח OPENAI_API_KEY הוגדר כראוי. פרטים: ${error.message}`;
                     chatHistory.prepend(errorElement);
                     
                     scrollToBottom();
@@ -192,11 +281,13 @@
                 if (e.target.classList.contains('answer-btn')) {
                     const q = e.target.getAttribute('data-question');
                     performSearch(q);
+                    // גלילה לשטח הצ'אט בגלל הקליק מהצד
+                    document.getElementById('query-input').focus(); 
                 }
             });
 
             // 7. אירוע קליק על שאלות קשורות וקישורי טופס
-             chatHistory.addEventListener('click', function(e) {
+            chatHistory.addEventListener('click', function(e) {
                 if (e.target.classList.contains('related-q')) {
                     const q = e.target.getAttribute('data-question');
                     performSearch(q);
@@ -210,7 +301,7 @@
                     const message = `קישור פנימי לטופס/מסמך "${e.target.textContent.trim()}" (מזהה: ${identifier}). יש צורך להטמיע את לוגיקת הניווט המתאימה כאן.`;
                     
                     const infoElement = document.createElement('div');
-                    infoElement.className = 'chat-item assistant-text welcome-message';
+                    infoElement.className = 'chat-item assistant-text welcome-message shadow-md bg-yellow-100 border-yellow-300 text-yellow-800';
                     infoElement.style.marginTop = '15px';
                     infoElement.innerHTML = `<strong>הודעה:</strong> ${message}`;
                     chatHistory.prepend(infoElement);
