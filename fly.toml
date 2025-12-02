@@ -1,6 +1,6 @@
 fly.toml
 
-קונפיגורציה המתאימה להרצת Gunicorn באמצעות Buildpack של Heroku
+קונפיגורציה מתאימה להרצת Gunicorn באמצעות Buildpack של Heroku
 
 app = "meyazegim"
 primary_region = "fra"
@@ -8,10 +8,10 @@ primary_region = "fra"
 [build]
 builder = "heroku/buildpacks:20"
 
-נגדיר את הפקודה שתרוץ - היא תשתמש ב-Procfile
+הפקודה שתרוץ - היא תשתמש ב-Procfile
 
 [processes]
-app = "gunicorn app:app" # משתמש בפקודה מה-Procfile או ב-Buildpack
+app = "gunicorn app:app"
 
 [[services]]
 internal_port = 8080 # הפורט הפנימי אליו Gunicorn אמור להיקשר
