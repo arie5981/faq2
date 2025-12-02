@@ -1,34 +1,15 @@
-fly.toml
-
-קובץ הגדרות עבור פריסה ב-Fly.io
-
-הגדרת שם האפליקציה (זהו שם האתר שלך ב-fly.dev)
-
 app = "meyazgim"
-
-האזור הראשי שבו האפליקציה תרוץ. hkg (הונג קונג) או ams (אמסטרדם) מומלצים לישראל.
-
 primary_region = "hkg"
-
-הגדרת סביבת הבנייה. שימוש ב-Buildpack של Heroku לפייתון.
 
 [build]
 builder = "heroku/buildpacks:20"
 
-הגדרות הרצה (Process). מריץ את שרת Flask באמצעות Gunicorn.
-
-הפקודה: gunicorn app:app מניחה שקובץ ה-Flask הראשי שלך נקרא 'app.py' ושהמופע (Instance) של Flask נקרא 'app'.
-
 [processes]
 app = "gunicorn app:app"
 
-הגדרות הפורט והחיבור (Services)
-
 [[services]]
-internal_port = 8080 # הפורט הפנימי שבו שרת Gunicorn רץ (כפי שמוגדר ב-Fly.io)
+internal_port = 8080
 protocol = "tcp"
-
-הגדרות פורטים חיצוניים
 
 [[services.ports]]
 port = 80
@@ -38,14 +19,10 @@ handlers = ["http"]
 port = 443
 handlers = ["tls", "http"]
 
-הגדרות מקביליות לביצועים
-
 [services.concurrency]
 type = "connections"
 hard_limit = 25
 soft_limit = 20
-
-בדיקות בריאות לוודא שהשרת רץ
 
 [[services.tcp_checks]]
 interval = "15s"
