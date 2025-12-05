@@ -1,6 +1,6 @@
-fly.toml app configuration file generated for meyazegim on 2025-12-05T11:46:20+02:00
+# fly.toml app configuration file generated for meyazegim on 2025-12-05T11:46:20+02:00
 
-See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 
 app = 'meyazegim'
 primary_region = 'fra'
