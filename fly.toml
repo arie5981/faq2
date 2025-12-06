@@ -7,10 +7,6 @@ primary_region = 'fra'
 
 [build]
 builder = "paketobuildpacks/builder:base"
-buildpacks = [
-"gcr.io/paketo-buildpacks/rust",
-"gcr.io/paketo-buildpacks/python"
-]
 
 [http_service]
 internal_port = 8080
