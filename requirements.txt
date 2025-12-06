@@ -1,8 +1,5 @@
 Flask
 gunicorn
 langchain-openai
-langchain-community
-faiss-cpu-no-avx2 # הוחלף מ-faiss-cpu כדי למנוע כשל ב-Buildpack
-rapidfuzz
 openai
 tiktoken
