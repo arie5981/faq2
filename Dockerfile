@@ -10,7 +10,7 @@ curl
 
 git &&
 
-curl --proto '=https' --tlsv1.2 -sSf https://www.google.com/url?sa=E&source=gmail&q=https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable &&
+curl --proto '=https' --tlsv1.2 -sSf https://www.google.com/search?q=https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable &&
 
 rm -rf /var/lib/apt/lists/*
 
