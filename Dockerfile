@@ -1,19 +1,6 @@
 FROM python:3.11-slim as build
 
-RUN apt-get update &&
-
-apt-get install -y --no-install-recommends
-
-build-essential
-
-curl
-
-git &&
-
-curl --proto '=https' --tlsv1.2 -sSf https://www.google.com/search?q=https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable &&
-
-rm -rf /var/lib/apt/lists/*
-
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl git && curl --proto '=https' --tlsv1.2 -sSf https://www.google.com/search?q=https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable && rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
