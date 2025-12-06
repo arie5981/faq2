@@ -6,7 +6,7 @@ app = 'meyazegim'
 primary_region = 'fra'
 
 [build]
-builder = "paketobuildpacks/builder:base"
+builder = "paketobuildpacks/builder:full"
 
 [http_service]
 internal_port = 8080
