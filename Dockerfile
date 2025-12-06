@@ -1,7 +1,5 @@
 FROM python:3.11-slim as build
 
-apt-get update & install build-essential (GCC), ו-Rust Compiler
-
 RUN apt-get update &&
 
 apt-get install -y --no-install-recommends
@@ -20,7 +18,6 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.11-slim
