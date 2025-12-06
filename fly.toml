@@ -6,7 +6,7 @@ app = 'meyazegim'
 primary_region = 'fra'
 
 [build]
-builder = "heroku/buildpacks:22" # <-- הוספנו את ההוראה הזו בחזרה!
+builder = "paketobuildpacks/builder:base"
 
 [http_service]
 internal_port = 8080
