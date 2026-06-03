@@ -2,6 +2,12 @@
 from flask import Flask, render_template
 import os
 
+# בדיקת ייבוא של הספריות מהקוד המקורי
+from rapidfuzz import fuzz
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+
 app = Flask(__name__)
 
 @app.route('/')
