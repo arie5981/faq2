@@ -2,16 +2,13 @@
 from flask import Flask, render_template, request, jsonify
 import os
 
-# הוספת ה-Imports של ספריות ה-AI והחיפוש מהקוד המקורי
+# השארנו רק ספריות פייתון בסיסיות ואת rapidfuzz
 import re
 import unicodedata
 import copy
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from rapidfuzz import fuzz
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
