@@ -3,6 +3,14 @@ from flask import Flask, render_template
 import os
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
+
+POPULAR_FAQ_LIST = [
+    "איך מוסיפים משתמש חדש באתר מייצגים.",
+    "מקבל הודעה שאחד או יותר מנתוני ההזדהות שגויים.",
+    "איך יוצרים קיצור דרך לאתר מייצגים על שולחן העבודה.",
+    "רוצה לקבל את הקוד החד פעמי לדואר אלקטרוני.",
+]
 
 @app.route('/')
 def index():
