@@ -6,8 +6,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# העתקת קבצי האפליקציה
+# העתקת קבצי האפליקציה וקובץ ה-FAQ
 COPY app.py .
+COPY faq.txt .
 COPY templates/ ./templates/
 
 # הגדרת משתנה סביבה לפורט
