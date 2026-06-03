@@ -3,7 +3,6 @@ from flask import Flask, render_template, request, jsonify
 import os
 import re
 import unicodedata
-from rapidfuzz import fuzz
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -44,28 +43,6 @@ def load_faq_file(path: str):
     except:
         return []
 
-def find_best_match_fuzzy(query: str, qa_pairs: list):
-    cleaned_query = clean_text(query)
-    best_match = None
-    best_score = 0
-    similar_questions = []
-    
-    for pair in qa_pairs:
-        cleaned_q = clean_text(pair["question"])
-        score = fuzz.token_set_ratio(cleaned_query, cleaned_q)
-        if score > 50:
-            similar_questions.append((pair["question"], pair["answer"], score))
-        if score > best_score:
-            best_score = score
-            best_match = pair
-
-    similar_questions.sort(key=lambda x: x[2], reverse=True)
-    top_similar = [q[0] for q in similar_questions[:3]]
-    
-    if best_match and best_score > 85:  # רף גבוה לחיפוש מהיר
-        return best_match["answer"], top_similar
-    return None, top_similar
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -79,17 +56,40 @@ def search():
         return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
         
     qa_pairs = load_faq_file(FAQ_PATH)
+    similar = []
     
-    # 1. ניסיון ראשון: חיפוש פאזי מהיר (חוסך פניות ל-AI)
-    fuzzy_answer, similar = find_best_match_fuzzy(query, qa_pairs)
-    if fuzzy_answer:
-        return jsonify({
-            "success": True,
-            "answer_html": f"<b>נמצאה תשובה במאגר:</b><br>{fuzzy_answer}",
-            "similar_questions": similar
-        })
+    # 1. טעינה עצלנית של rapidfuzz וניהול החיפוש הפאזי בפנים
+    try:
+        from rapidfuzz import fuzz
         
-    # 2. ניסיון שני: חיפוש סמנטי מבוסס AI (טעינה עצלנית למניעת חנק זיכרון)
+        cleaned_query = clean_text(query)
+        best_match = None
+        best_score = 0
+        similar_questions = []
+        
+        for pair in qa_pairs:
+            cleaned_q = clean_text(pair["question"])
+            score = fuzz.token_set_ratio(cleaned_query, cleaned_q)
+            if score > 50:
+                similar_questions.append((pair["question"], pair["answer"], score))
+            if score > best_score:
+                best_score = score
+                best_match = pair
+
+        similar_questions.sort(key=lambda x: x[2], reverse=True)
+        similar = [q[0] for q in similar_questions[:3]]
+        
+        if best_match and best_score > 85:
+            return jsonify({
+                "success": True,
+                "answer_html": f"<b>נמצאה תשובה במאגר:</b><br>{best_match['answer']}",
+                "similar_questions": similar
+            })
+    except Exception as e:
+        # אם rapidfuzz נכשלה בטעינה, נציג את השגיאה ונמשיך ל-AI
+        pass
+
+    # 2. ניסיון שני: חיפוש סמנטי מבוסס AI (טעינה עצלנית)
     try:
         from langchain_openai import OpenAIEmbeddings
         from langchain_community.vectorstores import FAISS
@@ -103,24 +103,20 @@ def search():
                 "similar_questions": similar
             })
             
-        # יצירת המסמכים עבור ה-Vector Store
         documents = [Document(page_content=f"שגיאה: {p['question']}\nתשובה: {p['answer']}", 
                               metadata={"answer": p["answer"], "question": p["question"]}) for p in qa_pairs]
         
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=openai_api_key)
         db = FAISS.from_documents(documents, embeddings)
         
-        # חיפוש סמנטי
         docs_and_scores = db.similarity_search_with_score(query, k=1)
         
         if docs_and_scores:
             doc, score = docs_and_scores[0]
-            # ב-FAISS, ככל שהציון (L2 distance) נמוך יותר, ההתאמה טובה יותר
             if score < 1.2: 
-                ai_answer = doc.metadata["answer"]
                 return jsonify({
                     "success": True,
-                    "answer_html": f"<b>תשובה סמנטית (AI):</b><br>{ai_answer}",
+                    "answer_html": f"<b>תשובה סמנטית (AI):</b><br>{doc.metadata['answer']}",
                     "similar_questions": similar
                 })
                 
@@ -133,7 +129,7 @@ def search():
     except Exception as e:
         return jsonify({
             "success": True,
-            "answer_html": f"לא נמצאה תשובה פאזית, ונכשלה ריצת ה-AI עקב שגיאה פנימית: {str(e)}",
+            "answer_html": f"לא נמצאה תשובה, ונכשלה ריצת ה-AI עקב שגיאה פנימית: {str(e)}",
             "similar_questions": similar
         })
 
