@@ -56,6 +56,7 @@ def search():
         return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
         
     qa_pairs = load_faq_file(FAQ_PATH)
+    num_pairs = len(qa_pairs)
     similar = []
     
     # 1. טעינה עצלנית של rapidfuzz וניהול החיפוש הפאזי בפנים
@@ -82,14 +83,21 @@ def search():
         if best_match and best_score > 85:
             return jsonify({
                 "success": True,
-                "answer_html": f"<b>נמצאה תשובה במאגר:</b><br>{best_match['answer']}",
+                "answer_html": f"<b>נמצאה תשובה במאגר (חיפוש מהיר):</b><br>{best_match['answer']}",
                 "similar_questions": similar
             })
     except Exception as e:
-        # אם rapidfuzz נכשלה בטעינה, נציג את השגיאה ונמשיך ל-AI
         pass
 
-    # 2. ניסיון שני: חיפוש סמנטי מבוסס AI (טעינה עצלנית)
+    # אם הגענו לכאן, החיפוש הפאזי לא מצא התאמה גבוהה מספיק. עוברים ל-AI.
+    if num_pairs == 0:
+        return jsonify({
+            "success": True,
+            "answer_html": f"לא נמצאה תשובה. שים לב: קובץ {FAQ_PATH} נטען כשהוא ריק או שלא נמצא בשרת!",
+            "similar_questions": []
+        })
+
+    # 2. חיפוש סמנטי מבוסס AI
     try:
         from langchain_openai import OpenAIEmbeddings
         from langchain_community.vectorstores import FAISS
@@ -99,11 +107,11 @@ def search():
         if not openai_api_key:
             return jsonify({
                 "success": True,
-                "answer_html": "לא נמצאה תשובה מדויקת, ומפתח ה-OPENAI_API_KEY לא מוגדר במערכת.",
+                "answer_html": f"לא נמצאה תשובה מדויקת, ומפתח ה-OPENAI_API_KEY לא מוגדר ב-Fly.io. (במאגר יש {num_pairs} שאלות).",
                 "similar_questions": similar
             })
             
-        documents = [Document(page_content=f"שגיאה: {p['question']}\nתשובה: {p['answer']}", 
+        documents = [Document(page_content=f"שאלה: {p['question']}\nתשובה: {p['answer']}", 
                               metadata={"answer": p["answer"], "question": p["question"]}) for p in qa_pairs]
         
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=openai_api_key)
@@ -111,6 +119,7 @@ def search():
         
         docs_and_scores = db.similarity_search_with_score(query, k=1)
         
+        # תיקון קריטי: בדיקה שהרשימה אינה ריקה לפני שגולשים לאינדקס 0
         if docs_and_scores:
             doc, score = docs_and_scores[0]
             if score < 1.2: 
@@ -122,14 +131,14 @@ def search():
                 
         return jsonify({
             "success": True,
-            "answer_html": "מצטער, לא הצלחתי למצוא תשובה מתאימה לשאלה זו במאגר המייצגים.",
+            "answer_html": f"מצטער, לא הצלחתי למצוא תשובה מתאימה במאגר. (חיפשתי סמנטית מתוך {num_pairs} שאלות).",
             "similar_questions": similar
         })
         
     except Exception as e:
         return jsonify({
             "success": True,
-            "answer_html": f"לא נמצאה תשובה, ונכשלה ריצת ה-AI עקב שגיאה פנימית: {str(e)}",
+            "answer_html": f"נכשלה ריצת ה-AI עקב שגיאה פנימית: {str(e)} (מאגר מכיל {num_pairs} שאלות).",
             "similar_questions": similar
         })
 
