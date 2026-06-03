@@ -2,16 +2,9 @@
 from flask import Flask, render_template, request, jsonify
 import os
 
-# ספריות ה-AI נשארות מיובאות כדי לוודא יציבות
-from rapidfuzz import fuzz
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
-
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False 
+app.config['JSON_AS_ASCII'] = False
 
-# רשימת השאלות הנפוצות להצגה בדף הבית (מהקוד המקורי שלך)
 POPULAR_FAQ_LIST = [
     "איך מוסיפים משתמש חדש באתר מייצגים.",
     "מקבל הודעה שאחד או יותר מנתוני ההזדהות שגויים.",
@@ -25,16 +18,13 @@ def index():
 
 @app.route('/search', methods=['POST'])
 def search():
-    # קבלת השאלה מה-HTML
-    data = request.get_json()
+    data = request.get_json() or {}
     query = data.get('query', '')
     
     if not query:
         return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
     
-    # זמני לבדיקה: השרת מחזיר את אותה השאלה כתוכי כדי לוודא שהצינור הוויזואלי עובד
     mock_answer = f"קיבלתי את השאלה שלך: <b>{query}</b>. השרת עובד ומגיב בהצלחה!"
-    
     return jsonify({
         "success": True,
         "answer_html": mock_answer,
