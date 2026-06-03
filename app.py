@@ -2,14 +2,6 @@
 from flask import Flask, render_template, request, jsonify
 import os
 
-# השארנו רק ספריות פייתון בסיסיות ואת rapidfuzz
-import re
-import unicodedata
-import copy
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
-from rapidfuzz import fuzz
-
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 
@@ -26,10 +18,18 @@ def index():
 
 @app.route('/search', methods=['POST'])
 def search():
+    # ה-Imports רצים רק פה פנימית, כשיש דרישה, ולא מדליקים את השרת בקריסה
+    try:
+        from langchain_openai import OpenAIEmbeddings
+        import tiktoken
+        status = "הספריות נטענו בהצלחה בתוך פונקציית החיפוש!"
+    except Exception as e:
+        status = f"שגיאה בטעינת הספריות: {str(e)}"
+
     data = request.get_json() or {}
     query = data.get('query', '')
     
-    mock_answer = f"שרת הבדיקה קיבל: {query}"
+    mock_answer = f"שרת הבדיקה קיבל: {query}. סטטוס ספריות: {status}"
     return jsonify({
         "success": True,
         "answer_html": mock_answer,
