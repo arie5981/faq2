@@ -129,4 +129,179 @@ def format_answer_for_html(text: str) -> str:
 # פונקציית טעינה עצלנית (Lazy Loading) - מונעת קריסות של השרת
 # ============================================================
 def ensure_data_loaded():
-    global faq_items, faq_store, embeddings_
+    global faq_items, faq_store, embeddings_ready, url_mapping
+    
+    if faq_items and embeddings_ready:
+        return
+
+    # 1. טעינת קובץ הטקסט של ה-FAQ וחילוץ הקישורים
+    if not faq_items:
+        try:
+            if os.path.exists(FAQ_PATH):
+                with open(FAQ_PATH, "r", encoding="utf-8") as f:
+                    raw_faq = f.read()
+                
+                # חילוץ מילון הקישורים הגלובלי מראש הקובץ
+                url_mapping = parse_url_mappings(raw_faq)
+                print(f"✅ נטענו {len(url_mapping)} חוקי מיפוי קישורים מה-FAQ.")
+                
+                # ניקוי הגדרות הקישורים מגוף הטקסט כדי שלא יפריעו לפארסר השאלות
+                clean_faq_text = re.sub(r">>.*?<<", "", raw_faq)
+                
+                faq_items = parse_faq_new(clean_faq_text)
+                print(f"✅ נטענו {len(faq_items)} שאלות מה-FAQ במצב עצלני.")
+            else:
+                print(f"❌ שגיאה: קובץ {FAQ_PATH} לא נמצא.")
+                return
+        except Exception as e:
+            print(f"❌ שגיאה בקריאת הקובץ: {e}")
+            return
+
+    # 2. בניית ה-Embeddings וה-FAISS רק ברגע האמת
+    if faq_items and not embeddings_ready:
+        try:
+            from langchain_openai import OpenAIEmbeddings
+            from langchain_community.vectorstores import FAISS
+            from langchain_core.documents import Document
+
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            if not openai_api_key:
+                print("🚨 אזהרה: OPENAI_API_KEY לא מוגדר במערכת.")
+                return
+
+            embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=openai_api_key)
+            docs = [Document(page_content=" | ".join([item.question] + item.variants), metadata={"idx": i})
+                    for i, item in enumerate(faq_items)]
+            
+            faq_store = FAISS.from_documents(docs, embeddings)
+            embeddings_ready = True
+            print("✅ אינדקס FAISS ו-Embeddings נוצרו בהצלחה בזיכרון!")
+        except Exception as e:
+            print(f"❌ בניית ה-Embeddings נכשלה: {e}. המערכת תתבסס על חיפוש פאזי בלבד.")
+            embeddings_ready = False
+
+def search_faq(query: str) -> Dict[str, Any]:
+    """מבצע את לוגיקת החיפוש המקורית והחכמה שלך."""
+    global faq_store, faq_items, embeddings_ready
+    
+    ensure_data_loaded()
+    
+    if not faq_items:
+        return {"success": False, "answer": "מאגר השאלות ריק או שלא נטען כראוי.", "similar_questions": []}
+
+    from rapidfuzz import fuzz
+    nq = normalize_he(query)
+
+    verbs = {
+        "add": ["הוסף", "להוסיף", "הוספה", "מוסיף", "מוסיפים", "לצרף", "צירוף", "פתיחה", "פתיחת", "רישום", "להירשם"],
+        "delete": ["מחק", "מחיקה", "להסיר", "הסר", "הסרה", "ביטול", "לבטל", "סגור", "לסגור", "ביטול משתמש"],
+        "update": ["עדכן", "לעדכן", "עדכון", "שינוי", "לשנות", "עריכה", "ערוך", "לתקן", "תיקון"]
+    }
+    intent = None
+    for k, words in verbs.items():
+        if any(w in nq for w in words):
+            intent = k
+            break
+    
+    scored = []
+    for i, item in enumerate(faq_items):
+        all_texts = [item.question] + item.variants
+        for t in all_texts:
+            score = fuzz.token_sort_ratio(nq, normalize_he(t))
+
+            t_intent = None
+            for k, words in verbs.items():
+                if any(w in t for w in words):
+                    t_intent = k
+                    break
+
+            if intent and t_intent and intent != t_intent:
+                score -= 50
+            if intent and t_intent and intent == t_intent:
+                score += 25
+
+            scored.append((score, i, t.strip(), t_intent))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+    top = scored[:5]
+
+    best_fuzzy_score = top[0][0] if top else 0
+    result_item = None
+    similar_questions = []
+
+    # חיפוש סמנטי באמצעות FAISS
+    if embeddings_ready and faq_store:
+        try:
+            hits = faq_store.similarity_search_with_score(nq, k=8)
+        except Exception as e:
+            print(f"Error during similarity search: {e}")
+            hits = []
+
+        key_words = ["יפוי", "כוח", "הרשאה", "ייצוג", "מייצג", "מעסיק", "מבוטח"]
+        boosted_hits = []
+
+        for doc, score in hits:
+            idx = doc.metadata["idx"]
+            question_text = faq_items[idx].question
+            text_norm = normalize_he(question_text + " " + " ".join(faq_items[idx].variants))
+
+            for kw in key_words:
+                if kw in nq and kw in text_norm:
+                    score -= 0.15 
+            boosted_hits.append((doc, score))
+
+        boosted_hits.sort(key=lambda x: x[1])
+        best_embed_score = boosted_hits[0][1] if boosted_hits else 999
+        
+        if best_fuzzy_score < 55 and best_embed_score > 1.2:
+             return {"success": False, "answer": "לא נמצאה תשובה, נסה לנסח את השאלה מחדש.", "similar_questions": []}
+
+        if best_fuzzy_score >= 55:
+            result_item = copy.deepcopy(faq_items[top[0][1]])
+        elif boosted_hits and best_embed_score <= 1.2:
+            result_item = copy.deepcopy(faq_items[boosted_hits[0][0].metadata["idx"]])
+            
+        if result_item:
+            similar_questions = [
+                faq_items[d.metadata["idx"]].question
+                for d, s in boosted_hits[1:4]
+                if s <= 1.3 and faq_items[d.metadata["idx"]].question.strip() != result_item.question.strip()
+            ][:3]
+    
+    elif best_fuzzy_score >= 55:
+        result_item = copy.deepcopy(faq_items[top[0][1]])
+        
+    if not result_item:
+        return {"success": False, "answer": "לא נמצאה תשובה, נסה לנסח את השאלה מחדש.", "similar_questions": []}
+
+    answer_text = result_item.answer.strip()
+    answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
+    
+    return {
+        "success": True, 
+        "answer_html": format_answer_for_html(answer_text),
+        "similar_questions": similar_questions
+    }
+
+# ============================================
+# ניתובים (Routes) של Flask
+# ============================================
+
+@app.route('/')
+def index():
+    return render_template('index.html', popular_questions=POPULAR_FAQ_LIST)
+
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json() or {}
+    query = data.get('query', '')
+    
+    if not query:
+        return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
+    
+    result = search_faq(query)
+    return jsonify(result)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
