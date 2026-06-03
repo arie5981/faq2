@@ -44,7 +44,6 @@ def load_faq_file(path: str):
     except:
         return []
 
-# פונקציית החיפוש הפאזי המקורית שלך
 def find_best_match_fuzzy(query: str, qa_pairs: list):
     cleaned_query = clean_text(query)
     best_match = None
@@ -54,10 +53,8 @@ def find_best_match_fuzzy(query: str, qa_pairs: list):
     for pair in qa_pairs:
         cleaned_q = clean_text(pair["question"])
         score = fuzz.token_set_ratio(cleaned_query, cleaned_q)
-        
         if score > 50:
             similar_questions.append((pair["question"], pair["answer"], score))
-            
         if score > best_score:
             best_score = score
             best_match = pair
@@ -65,8 +62,7 @@ def find_best_match_fuzzy(query: str, qa_pairs: list):
     similar_questions.sort(key=lambda x: x[2], reverse=True)
     top_similar = [q[0] for q in similar_questions[:3]]
     
-    # אם הציון גבוה מספיק, נחזיר את התשובה
-    if best_match and best_score > 70:
+    if best_match and best_score > 85:  # רף גבוה לחיפוש מהיר
         return best_match["answer"], top_similar
     return None, top_similar
 
@@ -83,18 +79,63 @@ def search():
         return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
         
     qa_pairs = load_faq_file(FAQ_PATH)
-    fuzzy_answer, similar = find_best_match_fuzzy(query, qa_pairs)
     
+    # 1. ניסיון ראשון: חיפוש פאזי מהיר (חוסך פניות ל-AI)
+    fuzzy_answer, similar = find_best_match_fuzzy(query, qa_pairs)
     if fuzzy_answer:
-        answer_html = f"<b>נמצאה תשובה בחיפוש מהיר:</b><br>{fuzzy_answer}"
-    else:
-        answer_html = "לא נמצאה תשובה מדויקת בחיפוש מהיר. (בשלב הבא נחבר את ה-AI)."
+        return jsonify({
+            "success": True,
+            "answer_html": f"<b>נמצאה תשובה במאגר:</b><br>{fuzzy_answer}",
+            "similar_questions": similar
+        })
         
-    return jsonify({
-        "success": True,
-        "answer_html": answer_html,
-        "similar_questions": similar
-    })
+    # 2. ניסיון שני: חיפוש סמנטי מבוסס AI (טעינה עצלנית למניעת חנק זיכרון)
+    try:
+        from langchain_openai import OpenAIEmbeddings
+        from langchain_community.vectorstores import FAISS
+        from langchain_core.documents import Document
+        
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            return jsonify({
+                "success": True,
+                "answer_html": "לא נמצאה תשובה מדויקת, ומפתח ה-OPENAI_API_KEY לא מוגדר במערכת.",
+                "similar_questions": similar
+            })
+            
+        # יצירת המסמכים עבור ה-Vector Store
+        documents = [Document(page_content=f"שגיאה: {p['question']}\nתשובה: {p['answer']}", 
+                              metadata={"answer": p["answer"], "question": p["question"]}) for p in qa_pairs]
+        
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=openai_api_key)
+        db = FAISS.from_documents(documents, embeddings)
+        
+        # חיפוש סמנטי
+        docs_and_scores = db.similarity_search_with_score(query, k=1)
+        
+        if docs_and_scores:
+            doc, score = docs_and_scores[0]
+            # ב-FAISS, ככל שהציון (L2 distance) נמוך יותר, ההתאמה טובה יותר
+            if score < 1.2: 
+                ai_answer = doc.metadata["answer"]
+                return jsonify({
+                    "success": True,
+                    "answer_html": f"<b>תשובה סמנטית (AI):</b><br>{ai_answer}",
+                    "similar_questions": similar
+                })
+                
+        return jsonify({
+            "success": True,
+            "answer_html": "מצטער, לא הצלחתי למצוא תשובה מתאימה לשאלה זו במאגר המייצגים.",
+            "similar_questions": similar
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": True,
+            "answer_html": f"לא נמצאה תשובה פאזית, ונכשלה ריצת ה-AI עקב שגיאה פנימית: {str(e)}",
+            "similar_questions": similar
+        })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
