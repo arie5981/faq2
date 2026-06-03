@@ -278,9 +278,15 @@ def load_initial_data():
             embeddings_ready = False
 
 # הרצת הטעינה פעם אחת בעת עליית השרת
-with app.app_context():
-    load_initial_data()
+#with app.app_context():
+#    load_initial_data()
 
+# פונקציה שתרוץ פעם אחת בלבד, רגע לפני שהבקשה הראשונה של משתמש מגיעה
+@app.before_request
+def initialize_on_first_request():
+    global faq_items
+    if not faq_items: # אם המידע עדיין לא נטען
+        load_initial_data()
 # ============================================
 # ניתובים (Routes) של Flask
 # ============================================
