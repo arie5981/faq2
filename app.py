@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # app.py
-# קובץ Flask ראשי המכיל את לוגיקת החיפוש הסמנטי והפאזי המקורית עם טעינה עצלנית יציבה.
+# קובץ Flask ראשי המכיל את לוגיקת החיפוש הסמנטי, הפאזי ומיפוי קישורים דינמי.
 
 import os
 import re
@@ -20,6 +20,7 @@ FAQ_PATH = "faq.txt"
 faq_items = []
 faq_store = None
 embeddings_ready = False
+url_mapping = {}  # מילון גלובלי שיחזיק את המיפוי: {'שם הקישור': 'הכתובת'}
 
 POPULAR_FAQ_LIST = [
     "איך מוסיפים משתמש חדש באתר מייצגים.",
@@ -60,7 +61,7 @@ def normalize_he(s: str) -> str:
     return s
 
 def parse_faq_new(text: str) -> List[FAQItem]:
-    """מפרק את קובץ ה-FAQ לפי מבנה שאלה/ניסוחים/תשובה האוריגינלי שלך."""
+    """מפרק את קובץ ה-FAQ לפי מבנה שאלה/ניסוחים/תשובה."""
     items = []
     blocks = re.split(r"(?=שאלה\s*:)", text)
     for b in blocks:
@@ -91,30 +92,66 @@ def parse_faq_new(text: str) -> List[FAQItem]:
         items.append(FAQItem(question, variants, answer))
     return items
 
+def parse_url_mappings(text: str) -> Dict[str, str]:
+    """סורק את ראש הקובץ ומחלץ את הגדרות הקישורים שבין >> ל-<<"""
+    mapping = {}
+    # מוצא את כל המופעים שנראים כך: >>טקסט: קישור<<
+    matches = re.findall(r">>\s*(.*?)\s*:\s*(.*?)\s*<<", text)
+    for key, url in matches:
+        mapping[key.strip()] = url.strip()
+    return mapping
+
 def format_answer_for_html(text: str) -> str:
-    """מעבד טקסט גולמי לתצוגת HTML כולל החלפת שורות והדגשות."""
+    """מעבד טקסט גולמי לתצוגת HTML ומחליף סוגריים מרובעים בהיפר-קישורים אמיתיים."""
+    global url_mapping
+    
+    # 1. טיפול במעברי שורה: החלפת \n ב-<br>
     formatted_text = text.replace('\n', '<br>')
-    formatted_text = re.sub(r'\[([^"\]]+)\]', r'<span class="highlight">\1</span>', formatted_text)
+    
+    # 2. החלפת סוגריים מרובעים [שם הקישור] בקישור HTML אמיתי מתוך המילון שנוצר
+    def replace_link(match):
+        link_name = match.group(1).strip()
+        # אם השם קיים במילון הקישורים הגלובלי, נהפוך אותו לקישור לחיץ
+        if link_name in url_mapping:
+            url = url_mapping[link_name]
+            # אם מדובר באימייל, נוסיף mailto:
+            if "@" in url and "://" not in url:
+                return f'<a href="mailto:{url}" target="_blank" class="chat-link">{link_name}</a>'
+            return f'<a href="{url}" target="_blank" class="chat-link">{link_name}</a>'
+        # פולבק: אם הוא לא במילון הקישורים, נשאיר אותו כעיצוב מודגש רגיל
+        return f'<span class="highlight">{link_name}</span>'
+
+    # מחפש כל תבנית של [טקסט]
+    formatted_text = re.sub(r'\[([^\]]+)\]', replace_link, formatted_text)
+    
+    # 3. טיפול בכותרת המטא-דאטה שמופיעה בתחתית התשובה
     formatted_text = formatted_text.replace("--- מטא דאטה ---", "<hr><code>--- מטא דאטה ---</code>")
     return formatted_text
 
 # ============================================================
-# פונקציית טעינה עצלנית (Lazy Loading) - מונעת קריסות של השרת
+# פונקציית טעינה עצלנית (Lazy Loading)
 # ============================================================
 def ensure_data_loaded():
-    global faq_items, faq_store, embeddings_ready
+    global faq_items, faq_store, embeddings_ready, url_mapping
     
-    # אם המידע כבר נטען בעבר, אין צורך לטעון שוב
     if faq_items and embeddings_ready:
         return
 
-    # 1. טעינת קובץ הטקסט של ה-FAQ (אם טרם נטען)
+    # 1. טעינת קובץ הטקסט של ה-FAQ
     if not faq_items:
         try:
             if os.path.exists(FAQ_PATH):
                 with open(FAQ_PATH, "r", encoding="utf-8") as f:
                     raw_faq = f.read()
-                faq_items = parse_faq_new(raw_faq)
+                
+                # חילוץ מילון הקישורים הגלובלי מראש הקובץ
+                url_mapping = parse_url_mappings(raw_faq)
+                print(f"✅ נטענו {len(url_mapping)} חוקי מיפוי קישורים מה-FAQ.")
+                
+                # ניקוי הגדרות הקישורים מגוף הטקסט כדי שלא יפריעו לפארסר השאלות
+                clean_faq_text = re.sub(r">>.*?<<", "", raw_faq)
+                
+                faq_items = parse_faq_new(clean_faq_text)
                 print(f"✅ נטענו {len(faq_items)} שאלות מה-FAQ במצב עצלני.")
             else:
                 print(f"❌ שגיאה: קובץ {FAQ_PATH} לא נמצא.")
@@ -123,7 +160,7 @@ def ensure_data_loaded():
             print(f"❌ שגיאה בקריאת הקובץ: {e}")
             return
 
-    # 2. בניית ה-Embeddings וה-FAISS רק ברגע האמת
+    # 2. בניית ה-Embeddings וה-FAISS
     if faq_items and not embeddings_ready:
         try:
             from langchain_openai import OpenAIEmbeddings
@@ -150,7 +187,6 @@ def search_faq(query: str) -> Dict[str, Any]:
     """מבצע את לוגיקת החיפוש המקורית והחכמה שלך."""
     global faq_store, faq_items, embeddings_ready
     
-    # וידוא בטוח שהמודלים והקבצים טעונים בזיכרון
     ensure_data_loaded()
     
     if not faq_items:
@@ -197,7 +233,6 @@ def search_faq(query: str) -> Dict[str, Any]:
     result_item = None
     similar_questions = []
 
-    # חיפוש סמנטי באמצעות FAISS
     if embeddings_ready and faq_store:
         try:
             hits = faq_store.similarity_search_with_score(nq, k=8)
@@ -240,7 +275,7 @@ def search_faq(query: str) -> Dict[str, Any]:
         result_item = copy.deepcopy(faq_items[top[0][1]])
         
     if not result_item:
-        return {"success": False, "answer": "לא נמצאה תשובה, נסה לנסח את השאלה מחדש. (חיפשתי בתוך קובץ מובנה)", "similar_questions": []}
+        return {"success": False, "answer": "לא נמצאה תשובה, נסה לנסח את השאלה מחדש.", "similar_questions": []}
 
     answer_text = result_item.answer.strip()
     answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
