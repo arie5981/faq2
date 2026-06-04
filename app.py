@@ -193,8 +193,23 @@ def search_faq(query: str) -> Dict[str, Any]:
     
     ensure_data_loaded()
     
+    # הגדרת הודעה שירותית קבועה למקרה שלא נמצאו תוצאות
+    friendly_no_answer = """
+    מצטער, לא מצאתי תשובה מדויקת לשאלה זו במאגר המידע של אתר המייצגים.<br><br>
+    מה ניתן לעשות?
+    <ul style="list-style-type: disc; margin-right: 20px; margin-top: 5px;">
+        <li>נסה לנסח את השאלה במילים אחרות או קצרות יותר.</li>
+        <li>ודא שאין שגיאות כתיב במונחי החיפוש.</li>
+        <li>בחר באחת מהשאלות הנפוצות המופיעות בתפריט הצד.</li>
+    </ul>
+    """
+    
     if not faq_items:
-        return {"success": False, "answer": "מאגר השאלות ריק או שלא נטען כראוי.", "similar_questions": []}
+        return {
+            "success": True, 
+            "answer_html": "מאגר השאלות ריק או שלא נטען כראוי.", 
+            "similar_questions": []
+        }
 
     from rapidfuzz import fuzz
 
@@ -255,13 +270,18 @@ def search_faq(query: str) -> Dict[str, Any]:
             for kw in key_words:
                 if kw in nq and kw in text_norm:
                     score -= 0.15 
-            boosted_hits.append((doc, score))
+                boosted_hits.append((doc, score))
 
         boosted_hits.sort(key=lambda x: x[1])
         best_embed_score = boosted_hits[0][1] if boosted_hits else 999
         
+        # --- תיקון נקודת יציאה 1: החזרת הודעה שירותית בבועה לבנה במקום ריבוע אדום ---
         if best_fuzzy_score < 55 and best_embed_score > 1.2:
-             return {"success": False, "answer": "לא נמצאה תשובה, נסה לנסח את השאלה מחדש.", "similar_questions": []}
+             return {
+                 "success": True, 
+                 "answer_html": friendly_no_answer, 
+                 "similar_questions": []
+             }
 
         if best_fuzzy_score >= 55:
             result_item = copy.deepcopy(faq_items[top[0][1]])
@@ -278,8 +298,13 @@ def search_faq(query: str) -> Dict[str, Any]:
     elif best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
         
+    # --- תיקון נקודת יציאה 2: במקרה שלא נמצא result_item מציגים הודעה שירותית תקינה ---
     if not result_item:
-        return {"success": False, "answer": "לא נמצאה תשובה, נסה לנסח את השאלה מחדש.", "similar_questions": []}
+        return {
+            "success": True, 
+            "answer_html": friendly_no_answer, 
+            "similar_questions": []
+        }
 
     answer_text = result_item.answer.strip()
     answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
