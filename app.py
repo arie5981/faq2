@@ -188,37 +188,33 @@ def ensure_data_loaded():
             embeddings_ready = False
 
 def search_faq(query: str) -> Dict[str, Any]:
-    """מבצע את לוגיקת החיפוש המקורית והחכמה שלך."""
+    """מבצע את לוגיקת החיפוש המקורית, עם הגנה מפני כפילויות ונטרול עיוות אינטנטים."""
     global faq_store, faq_items, embeddings_ready
     
     ensure_data_loaded()
     
-    # הגדרת הודעה שירותית קבועה למקרה שלא נמצאו תוצאות
     friendly_no_answer = """
     מצטער, לא מצאתי תשובה מדויקת לשאלה זו במאגר המידע של אתר המייצגים.<br><br>
     מה ניתן לעשות?
     <ul style="list-style-type: disc; margin-right: 20px; margin-top: 5px;">
-        <li>נסה לנסח מחדש את השאלה.</li>
+        <li>נסה לנסח את השאלה במילים אחרות או קצרות יותר.</li>
         <li>ודא שאין שגיאות כתיב במונחי החיפוש.</li>
         <li>בחר באחת מהשאלות הנפוצות המופיעות בתפריט הצד.</li>
     </ul>
     """
     
     if not faq_items:
-        return {
-            "success": True, 
-            "answer_html": "מאגר השאלות ריק או שלא נטען כראוי.", 
-            "similar_questions": []
-        }
+        return {"success": True, "answer_html": "מאגר השאלות ריק או שלא נטען כראוי.", "similar_questions": []}
 
     from rapidfuzz import fuzz
 
     nq = normalize_he(query)
 
+    # --- שינוי 1: עידון דרמטי של משקלי ה-Intent כדי שמילים כמו "לשנות" לא יהרסו את החיפוש ---
     verbs = {
         "add": ["הוסף", "להוסיף", "הוספה", "מוסיף", "מוסיפים", "לצרף", "צירוף", "פתיחה", "פתיחת", "רישום", "להירשם"],
         "delete": ["מחק", "מחיקה", "להסיר", "הסר", "הסרה", "ביטול", "לבטל", "סגור", "לסגור", "ביטול משתמש"],
-        "update": ["עדכן", "לעדכן", "עדכון", "שינוי", "לשנות", "עריכה", "ערוך", "לתקן", "תיקון"]
+        "update": ["עדכן", "לעדכן", "עדכון", "עריכה", "ערוך", "לתקן", "תיקון"] # הסרנו את "שינוי/לשנות" הגנריות מכאן
     }
     intent = None
     for k, words in verbs.items():
@@ -238,10 +234,11 @@ def search_faq(query: str) -> Dict[str, Any]:
                     t_intent = k
                     break
 
+            # הפחתנו את הקנס מ-50 ל-5 ואת הבונוס מ-25 ל-2 בלבד, כדי שהטקסט האמיתי יהיה העיקר!
             if intent and t_intent and intent != t_intent:
-                score -= 50
+                score -= 5
             if intent and t_intent and intent == t_intent:
-                score += 25
+                score += 2
 
             scored.append((score, i, t.strip(), t_intent))
 
@@ -275,36 +272,32 @@ def search_faq(query: str) -> Dict[str, Any]:
         boosted_hits.sort(key=lambda x: x[1])
         best_embed_score = boosted_hits[0][1] if boosted_hits else 999
         
-        # --- תיקון נקודת יציאה 1: החזרת הודעה שירותית בבועה לבנה במקום ריבוע אדום ---
         if best_fuzzy_score < 55 and best_embed_score > 1.2:
-             return {
-                 "success": True, 
-                 "answer_html": friendly_no_answer, 
-                 "similar_questions": []
-             }
+             return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
 
         if best_fuzzy_score >= 55:
             result_item = copy.deepcopy(faq_items[top[0][1]])
         elif boosted_hits and best_embed_score <= 1.2:
             result_item = copy.deepcopy(faq_items[boosted_hits[0][0].metadata["idx"]])
             
+        # --- שינוי 2: הגנה מוחלטת מפני כפילויות בשאלות הקשורות ---
         if result_item:
-            similar_questions = [
-                faq_items[d.metadata["idx"]].question
-                for d, s in boosted_hits[1:4]
-                if s <= 1.3 and faq_items[d.metadata["idx"]].question.strip() != result_item.question.strip()
-            ][:3]
+            seen_questions = set()
+            seen_questions.add(result_item.question.strip()) # לא נרצה להציג את השאלה הנוכחית כשאלה קשורה
+            
+            for d, s in boosted_hits[1:]:
+                q_text = faq_items[d.metadata["idx"]].question.strip()
+                if s <= 1.3 and q_text not in seen_questions:
+                    similar_questions.append(q_text)
+                    seen_questions.add(q_text) # מסמנים שראינו כדי שלא יחזור על עצמו
+                if len(similar_questions) >= 3: # עוצרים כשיש לנו 3 שאלות ייחודיות
+                    break
     
     elif best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
         
-    # --- תיקון נקודת יציאה 2: במקרה שלא נמצא result_item מציגים הודעה שירותית תקינה ---
     if not result_item:
-        return {
-            "success": True, 
-            "answer_html": friendly_no_answer, 
-            "similar_questions": []
-        }
+        return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
 
     answer_text = result_item.answer.strip()
     answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
