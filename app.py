@@ -249,16 +249,17 @@ def search_faq(query: str) -> Dict[str, Any]:
     result_item = None
     similar_questions = []
 
-    if embeddings_ready and faq_store:
+if embeddings_ready and faq_store:
         try:
+            # שולחים לחיפוש סמנטי לקבלת ה-8 הכי קרובים רעיונית
             hits = faq_store.similarity_search_with_score(nq, k=8)
         except Exception as e:
             print(f"Error during similarity search: {e}")
             hits = []
 
+        # מערכת בונוסים קלה למילים ייחודיות (משאירים את הלוגיקה שלך)
         key_words = ["יפוי", "כוח", "הרשאה", "ייצוג", "מייצג", "מעסיק", "מבוטח"]
         boosted_hits = []
-
         for doc, score in hits:
             idx = doc.metadata["idx"]
             question_text = faq_items[idx].question
@@ -266,33 +267,45 @@ def search_faq(query: str) -> Dict[str, Any]:
 
             for kw in key_words:
                 if kw in nq and kw in text_norm:
-                    score -= 0.15 
-                boosted_hits.append((doc, score))
+                    score -= 0.15  # ככל שהציון נמוך יותר ב-FAISS, זה קרוב יותר
+            boosted_hits.append((doc, score))
 
+        # מיון מחדש לפי הציונים המשופרים
         boosted_hits.sort(key=lambda x: x[1])
         best_embed_score = boosted_hits[0][1] if boosted_hits else 999
         
-        if best_fuzzy_score < 55 and best_embed_score > 1.2:
-             return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
-
-        if best_fuzzy_score >= 55:
+        # --- השינוי הדרמטי בהחלטה קביעת התוצאה ---
+        
+        # אסטרטגיה 1: אם יש התאמה פאזית מילולית חזקה מאוד (מעל 85), נשתמש בה
+        if best_fuzzy_score >= 85:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-        elif boosted_hits and best_embed_score <= 1.2:
+        
+        # אסטרטגיה 2: אם אין התאמה מילולית מדויקת, סומכים על ה-Embeddings (ציון קטן מ-1.15 הוא מעולה)
+        elif boosted_hits and best_embed_score <= 1.15:
             result_item = copy.deepcopy(faq_items[boosted_hits[0][0].metadata["idx"]])
-            
-        # --- שינוי 2: הגנה מוחלטת מפני כפילויות בשאלות הקשורות ---
+        
+        # אסטרטגיה 3: פשרה - אם הפאזי סביר (מעל 60) והסמנטי לא רע, ניקח פאזי
+        elif best_fuzzy_score >= 60:
+            result_item = copy.deepcopy(faq_items[top[0][1]])
+        
+        # הגנה: אם הכל חלש מדי - סימן שאין באמת תשובה במאגר
+        else:
+            return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
+
+        # חילוץ שאלות קשורות ללא כפילויות
         if result_item:
             seen_questions = set()
-            seen_questions.add(result_item.question.strip()) # לא נרצה להציג את השאלה הנוכחית כשאלה קשורה
+            seen_questions.add(result_item.question.strip())
             
-            for d, s in boosted_hits[1:]:
+            for d, s in boosted_hits:
                 q_text = faq_items[d.metadata["idx"]].question.strip()
-                if s <= 1.3 and q_text not in seen_questions:
+                if q_text not in seen_questions:
                     similar_questions.append(q_text)
-                    seen_questions.add(q_text) # מסמנים שראינו כדי שלא יחזור על עצמו
-                if len(similar_questions) >= 3: # עוצרים כשיש לנו 3 שאלות ייחודיות
+                    seen_questions.add(q_text)
+                if len(similar_questions) >= 3:
                     break
     
+    # fallback למקרה שאין Embeddings פעיל (רק פאזי)
     elif best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
         
@@ -307,7 +320,6 @@ def search_faq(query: str) -> Dict[str, Any]:
         "answer_html": format_answer_for_html(answer_text),
         "similar_questions": similar_questions
     }
-
 # ============================================
 # ניתובים (Routes) של Flask
 # ============================================
