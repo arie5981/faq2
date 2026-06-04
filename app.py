@@ -108,24 +108,23 @@ def format_answer_for_html(text: str) -> str:
     # 1. טיפול במעברי שורה: החלפת \n ב-<br>
     formatted_text = text.replace('\n', '<br>')
     
-    # הגדרת סטייל קבוע לקישורים: צבע כחול, קו תחתון, ושינוי הסמן ליד
+    # הגדרת סטייל קבוע לקישורים
     link_style = 'style="color: #0000ee; text-decoration: underline; cursor: pointer;"'
     
-    # 2. החלפת סוגריים מרובעים [שם הקישור] בקישור HTML אמיתי מתוך המילון שנוצר
+    # 2. החלפת סוגריים מרובעים [שם הקישור]
     def replace_link(match):
         link_name = match.group(1).strip()
         
-        # אם השם קיים במילון הקישורים הגלובלי, נשתמש בכתובת שלו
         if link_name in url_mapping:
             url = url_mapping[link_name]
-            # אם מדובר באימייל, נוסיף mailto:
             if "@" in url and "://" not in url:
-                return f'<a href="mailto:{url}" target="_blank" {link_style}>{link_name}</a>'
-            return f'<a href="{url}" target="_blank" {link_style}>{link_name}</a>'
+                return f'<a href="mailto:{url}" {link_style}>{link_name}</a>'
+            
+            # --- השינוי פה: קריאה לפונקציה מיוחדת במקום href ישיר ---
+            return f'<a onclick="safeOpen(\'{url}\')" {link_style}>{link_name}</a>'
         
-        # פולבק: אם הוא לא במילון הקישורים, נהפוך אותו לקישור מקומי (href="#") עם אותו העיצוב
         return f'<a href="#" {link_style}>{link_name}</a>'
-
+        
     # מחפש כל תבנית של [טקסט]
     formatted_text = re.sub(r'\[([^\]]+)\]', replace_link, formatted_text)
     
