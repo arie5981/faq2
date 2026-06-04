@@ -95,7 +95,6 @@ def parse_faq_new(text: str) -> List[FAQItem]:
 def parse_url_mappings(text: str) -> Dict[str, str]:
     """סורק את ראש הקובץ ומחלץ את הגדרות הקישורים שבין >> ל-<<"""
     mapping = {}
-    # מוצא את כל המופעים שנראים כך: >>טקסט: קישור<<
     matches = re.findall(r">>\s*(.*?)\s*:\s*(.*?)\s*<<", text)
     for key, url in matches:
         mapping[key.strip()] = url.strip()
@@ -105,13 +104,9 @@ def format_answer_for_html(text: str) -> str:
     """מעבד טקסט גולמי לתצוגת HTML ומחליף סוגריים מרובעים בהיפר-קישורים אמיתיים בכחול עם קו תחתון."""
     global url_mapping
     
-    # 1. טיפול במעברי שורה: החלפת \n ב-<br>
     formatted_text = text.replace('\n', '<br>')
-    
-    # הגדרת סטייל קבוע לקישורים
     link_style = 'style="color: #0000ee; text-decoration: underline; cursor: pointer;"'
     
-    # 2. החלפת סוגריים מרובעים [שם הקישור]
     def replace_link(match):
         link_name = match.group(1).strip()
         
@@ -120,15 +115,11 @@ def format_answer_for_html(text: str) -> str:
             if "@" in url and "://" not in url:
                 return f'<a href="mailto:{url}" {link_style}>{link_name}</a>'
             
-            # --- השינוי פה: קריאה לפונקציה מיוחדת במקום href ישיר ---
             return f'<a onclick="safeOpen(\'{url}\')" {link_style}>{link_name}</a>'
         
         return f'<a href="#" {link_style}>{link_name}</a>'
         
-    # מחפש כל תבנית של [טקסט]
     formatted_text = re.sub(r'\[([^\]]+)\]', replace_link, formatted_text)
-    
-    # 3. טיפול בכותרת המטא-דאטה שמופיעה בתחתית התשובה
     formatted_text = formatted_text.replace("--- מטא דאטה ---", "<hr><code>--- מטא דאטה ---</code>")
     return formatted_text
 
@@ -141,18 +132,15 @@ def ensure_data_loaded():
     if faq_items and embeddings_ready:
         return
 
-    # 1. טעינת קובץ הטקסט של ה-FAQ
     if not faq_items:
         try:
             if os.path.exists(FAQ_PATH):
                 with open(FAQ_PATH, "r", encoding="utf-8") as f:
                     raw_faq = f.read()
                 
-                # חילוץ מילון הקישורים הגלובלי מראש הקובץ
                 url_mapping = parse_url_mappings(raw_faq)
                 print(f"✅ נטענו {len(url_mapping)} חוקי מיפוי קישורים מה-FAQ.")
                 
-                # ניקוי הגדרות הקישורים מגוף הטקסט כדי שלא יפריעו לפארסר השאלות
                 clean_faq_text = re.sub(r">>.*?<<", "", raw_faq)
                 
                 faq_items = parse_faq_new(clean_faq_text)
@@ -164,7 +152,6 @@ def ensure_data_loaded():
             print(f"❌ שגיאה בקריאת הקובץ: {e}")
             return
 
-    # 2. בניית ה-Embeddings וה-FAISS
     if faq_items and not embeddings_ready:
         try:
             from langchain_openai import OpenAIEmbeddings
@@ -210,11 +197,10 @@ def search_faq(query: str) -> Dict[str, Any]:
 
     nq = normalize_he(query)
 
-    # --- שינוי 1: עידון דרמטי של משקלי ה-Intent כדי שמילים כמו "לשנות" לא יהרסו את החיפוש ---
     verbs = {
         "add": ["הוסף", "להוסיף", "הוספה", "מוסיף", "מוסיפים", "לצרף", "צירוף", "פתיחה", "פתיחת", "רישום", "להירשם"],
         "delete": ["מחק", "מחיקה", "להסיר", "הסר", "הסרה", "ביטול", "לבטל", "סגור", "לסגור", "ביטול משתמש"],
-        "update": ["עדכן", "לעדכן", "עדכון", "עריכה", "ערוך", "לתקן", "תיקון"] # הסרנו את "שינוי/לשנות" הגנריות מכאן
+        "update": ["עדכן", "לעדכן", "עדכון", "עריכה", "ערוך", "לתקן", "תיקון"]
     }
     intent = None
     for k, words in verbs.items():
@@ -234,7 +220,6 @@ def search_faq(query: str) -> Dict[str, Any]:
                     t_intent = k
                     break
 
-            # הפחתנו את הקנס מ-50 ל-5 ואת הבונוס מ-25 ל-2 בלבד, כדי שהטקסט האמיתי יהיה העיקר!
             if intent and t_intent and intent != t_intent:
                 score -= 5
             if intent and t_intent and intent == t_intent:
@@ -249,15 +234,14 @@ def search_faq(query: str) -> Dict[str, Any]:
     result_item = None
     similar_questions = []
 
-if embeddings_ready and faq_store:
+    # --- תיקון ההזחה הקריטי שבוצע כאן ---
+    if embeddings_ready and faq_store:
         try:
-            # שולחים לחיפוש סמנטי לקבלת ה-8 הכי קרובים רעיונית
             hits = faq_store.similarity_search_with_score(nq, k=8)
         except Exception as e:
             print(f"Error during similarity search: {e}")
             hits = []
 
-        # מערכת בונוסים קלה למילים ייחודיות (משאירים את הלוגיקה שלך)
         key_words = ["יפוי", "כוח", "הרשאה", "ייצוג", "מייצג", "מעסיק", "מבוטח"]
         boosted_hits = []
         for doc, score in hits:
@@ -267,32 +251,21 @@ if embeddings_ready and faq_store:
 
             for kw in key_words:
                 if kw in nq and kw in text_norm:
-                    score -= 0.15  # ככל שהציון נמוך יותר ב-FAISS, זה קרוב יותר
+                    score -= 0.15
             boosted_hits.append((doc, score))
 
-        # מיון מחדש לפי הציונים המשופרים
         boosted_hits.sort(key=lambda x: x[1])
         best_embed_score = boosted_hits[0][1] if boosted_hits else 999
         
-        # --- השינוי הדרמטי בהחלטה קביעת התוצאה ---
-        
-        # אסטרטגיה 1: אם יש התאמה פאזית מילולית חזקה מאוד (מעל 85), נשתמש בה
         if best_fuzzy_score >= 85:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-        
-        # אסטרטגיה 2: אם אין התאמה מילולית מדויקת, סומכים על ה-Embeddings (ציון קטן מ-1.15 הוא מעולה)
         elif boosted_hits and best_embed_score <= 1.15:
             result_item = copy.deepcopy(faq_items[boosted_hits[0][0].metadata["idx"]])
-        
-        # אסטרטגיה 3: פשרה - אם הפאזי סביר (מעל 60) והסמנטי לא רע, ניקח פאזי
         elif best_fuzzy_score >= 60:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-        
-        # הגנה: אם הכל חלש מדי - סימן שאין באמת תשובה במאגר
         else:
             return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
 
-        # חילוץ שאלות קשורות ללא כפילויות
         if result_item:
             seen_questions = set()
             seen_questions.add(result_item.question.strip())
@@ -305,7 +278,6 @@ if embeddings_ready and faq_store:
                 if len(similar_questions) >= 3:
                     break
     
-    # fallback למקרה שאין Embeddings פעיל (רק פאזי)
     elif best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
         
@@ -320,6 +292,7 @@ if embeddings_ready and faq_store:
         "answer_html": format_answer_for_html(answer_text),
         "similar_questions": similar_questions
     }
+
 # ============================================
 # ניתובים (Routes) של Flask
 # ============================================
