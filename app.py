@@ -325,7 +325,7 @@ def search_faq(query: str) -> Dict[str, Any]:
     if best_embed_score == 999.0:
         semantic_display = "0"
     else:
-        semantic_display = f"{best_embed_score:.1f}"
+        semantic_display = f"{best_embed_score:.2f}"
 
     # בניית הטקסט ותוספת המטא-דאטה בשורות מסודרות לפי הבקשה
     answer_text = result_item.answer.strip()
