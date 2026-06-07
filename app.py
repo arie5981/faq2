@@ -201,11 +201,13 @@ def search_faq(query: str) -> Dict[str, Any]:
         return {"success": True, "answer_html": "מאגר השאלות ריק או שלא נטען כראוי.", "similar_questions": []}
 
     # ==========================================================
-    # הגנה מפני קריסה: הגדרת ערכי ברירת מחדל ראשוניים
+    # הגדרת ערכי ברירת מחדל ראשוניים (Fail-safe)
     # ==========================================================
     search_type = "לא נקבע"
     result_item = None
     similar_questions = []
+    best_fuzzy_score = 0
+    best_embed_score = 999  # ערך גבוה כברירת מחדל (בסמנטי ציון נמוך יותר הוא טוב יותר)
 
     from rapidfuzz import fuzz
 
@@ -244,6 +246,7 @@ def search_faq(query: str) -> Dict[str, Any]:
     scored.sort(reverse=True, key=lambda x: x[0])
     top = scored[:5]
 
+    # עדכון הציון הפאזי הטוב ביותר שנמצא
     best_fuzzy_score = top[0][0] if top else 0
 
     # --- מסלול א': חיפוש משולב (סמנטי + פאזי) כאשר האינדקס מוכן ---
@@ -273,20 +276,23 @@ def search_faq(query: str) -> Dict[str, Any]:
                 seen_indices.add(idx)
 
         unique_hits.sort(key=lambda x: x[1])
-        best_embed_score = unique_hits[0][1] if unique_hits else 999
+        
+        # עדכון הציון הסמנטי הטוב ביותר שנמצא
+        if unique_hits:
+            best_embed_score = unique_hits[0][1]
         
         # שלב הבורר הלוגי
         if best_fuzzy_score >= 85:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = f"פאזי מדויק (Fuzzy - ציון: {best_fuzzy_score})"
+            search_type = "פאזי מדויק"
             
         elif unique_hits and best_embed_score <= 1.15:
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
-            search_type = f"סמנטי (Semantic - מרחק: {best_embed_score:.2f})"
+            search_type = "סמנטי"
             
         elif best_fuzzy_score >= 60:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = f"פאזי חלקי (Fuzzy - ציון: {best_fuzzy_score})"
+            search_type = "פאזי חלקי"
             
         # מילוי מערך השאלות הדומות במידה ונמצאה תוצאה
         if result_item:
@@ -304,11 +310,9 @@ def search_faq(query: str) -> Dict[str, Any]:
     # --- מסלול ב': פילבק (Fallback) לפאזי בלבד (אם OpenAI לא זמין או שלא עברנו את הסף למעלה) ---
     if not result_item and best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
-        search_type = f"פאזי פילבק (Fuzzy Fallback - ציון: {best_fuzzy_score})"
+        search_type = "פאזי פילבק"
         
-    # ==========================================================
     # בדיקה סופית: מה קורה כשהוא לא מוצא תשובה?
-    # ==========================================================
     if not result_item:
         return {
             "success": True, 
@@ -316,9 +320,20 @@ def search_faq(query: str) -> Dict[str, Any]:
             "similar_questions": []
         }
 
-    # בניית הטקסט ותוספת המטא-דאטה בבטחה
+    # עיבוד תצוגת הציון הסמנטי למשתמש
+    if best_embed_score == 999:
+        semantic_display = "N/A (לא בוצע/לא זמין)"
+    else:
+        semantic_display = f"{best_embed_score:.2f}"
+
+    # בניית הטקסט ותוספת המטא-דאטה בצורה עשירה ומפורטת
     answer_text = result_item.answer.strip()
-    answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nסוג חיפוש: {search_type}\nשאלה מזוהה: {result_item.question}"
+    answer_text += f"\n\n--- מטא דאטה ---"
+    answer_text += f"\nמקור: faq"
+    answer_text += f"\nמנוע מנצח: {search_type}"
+    answer_text += f"\nציון פאזי (מילים): {best_fuzzy_score}"
+    answer_text += f"\nציון סמנטי (מרחק משמעות): {semantic_display}"
+    answer_text += f"\nשאלה מזוהה במאגר: {result_item.question}"
     
     return {
         "success": True, 
