@@ -181,6 +181,7 @@ def ensure_data_loaded():
         except Exception as e:
             print(f"❌ בניית ה-Embeddings נכשלה: {e}. המערכת תתבסס על חיפוש פאזי בלבד.")
             embeddings_ready = False
+
 def search_faq(query: str) -> Dict[str, Any]:
     """מבצע את לוגיקת החיפוש המקורית, עם הגנה מפני כפילויות ונטרול עיוות אינטנטים."""
     global faq_store, faq_items, embeddings_ready
@@ -206,8 +207,8 @@ def search_faq(query: str) -> Dict[str, Any]:
     search_type = "לא נקבע"
     result_item = None
     similar_questions = []
-    best_fuzzy_score = 0
-    best_embed_score = 999  # ערך גבוה כברירת מחדל (בסמנטי ציון נמוך יותר הוא טוב יותר)
+    best_fuzzy_score = 0.0
+    best_embed_score = 999.0  # ערך גבוה כברירת מחדל (בסמנטי ציון נמוך יותר הוא טוב יותר)
 
     from rapidfuzz import fuzz
 
@@ -228,7 +229,7 @@ def search_faq(query: str) -> Dict[str, Any]:
     for i, item in enumerate(faq_items):
         all_texts = [item.question] + item.variants
         for t in all_texts:
-            score = fuzz.token_sort_ratio(nq, normalize_he(t))
+            score = float(fuzz.token_sort_ratio(nq, normalize_he(t)))
 
             t_intent = None
             for k, words in verbs.items():
@@ -247,7 +248,7 @@ def search_faq(query: str) -> Dict[str, Any]:
     top = scored[:5]
 
     # עדכון הציון הפאזי הטוב ביותר שנמצא
-    best_fuzzy_score = top[0][0] if top else 0
+    best_fuzzy_score = float(top[0][0]) if top else 0.0
 
     # --- מסלול א': חיפוש משולב (סמנטי + פאזי) כאשר האינדקס מוכן ---
     if embeddings_ready and faq_store:
@@ -279,12 +280,12 @@ def search_faq(query: str) -> Dict[str, Any]:
         
         # עדכון הציון הסמנטי הטוב ביותר שנמצא
         if unique_hits:
-            best_embed_score = unique_hits[0][1]
+            best_embed_score = float(unique_hits[0][1])
         
-        # שלב הבורר הלוגי
+        # שלב הבורר הלוגי (ניקוי הגדרות ה-search_type)
         if best_fuzzy_score >= 85:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי מדויק"
+            search_type = "פאזי"
             
         elif unique_hits and best_embed_score <= 1.15:
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
@@ -292,7 +293,7 @@ def search_faq(query: str) -> Dict[str, Any]:
             
         elif best_fuzzy_score >= 60:
             result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי חלקי"
+            search_type = "פאזי"
             
         # מילוי מערך השאלות הדומות במידה ונמצאה תוצאה
         if result_item:
@@ -307,10 +308,10 @@ def search_faq(query: str) -> Dict[str, Any]:
                 if len(similar_questions) >= 3:
                     break
     
-    # --- מסלול ב': פילבק (Fallback) לפאזי בלבד (אם OpenAI לא זמין או שלא עברנו את הסף למעלה) ---
+    # --- מסלול ב': פילבק (Fallback) לפאזי בלבד ---
     if not result_item and best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
-        search_type = "פאזי פילבק"
+        search_type = "פאזי"
         
     # בדיקה סופית: מה קורה כשהוא לא מוצא תשובה?
     if not result_item:
@@ -321,18 +322,15 @@ def search_faq(query: str) -> Dict[str, Any]:
         }
 
     # עיבוד תצוגת הציון הסמנטי למשתמש
-    if best_embed_score == 999:
-        semantic_display = "N/A (לא בוצע/לא זמין)"
+    if best_embed_score == 999.0:
+        semantic_display = "0"
     else:
-        semantic_display = f"{best_embed_score:.2f}"
+        semantic_display = f"{best_embed_score:.1f}"
 
-    # בניית הטקסט ותוספת המטא-דאטה בצורה עשירה ומפורטת
+    # בניית הטקסט ותוספת המטא-דאטה בשורות מסודרות לפי הבקשה
     answer_text = result_item.answer.strip()
     answer_text += f"\n\n--- מטא דאטה ---"
-    answer_text += f"\nמקור: faq"
-    answer_text += f"\nמנוע מנצח: {search_type}"
-    answer_text += f"\nציון פאזי (מילים): {best_fuzzy_score}"
-    answer_text += f"\nציון סמנטי (מרחק משמעות): {semantic_display}"
+    answer_text += f"\nמקור: faq  מנוע: {search_type}.  פאזי: {best_fuzzy_score:.1f}.  סמנטי: {semantic_display}"
     answer_text += f"\nשאלה מזוהה במאגר: {result_item.question}"
     
     return {
@@ -340,7 +338,6 @@ def search_faq(query: str) -> Dict[str, Any]:
         "answer_html": format_answer_for_html(answer_text),
         "similar_questions": similar_questions
     }
-
 # ============================================
 # ניתובים (Routes) של Flask
 # ============================================
