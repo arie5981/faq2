@@ -300,7 +300,7 @@ def search_faq(query: str) -> Dict[str, Any]:
         return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
 
     answer_text = result_item.answer.strip()
-    answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
+    # answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
     answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nסוג חיפוש: {search_type}\nשאלה מזוהה: {result_item.question}"
     
     return {
