@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False 
+app.config['JSON_AS_ASCII'] = False
 
 # הגדרת משתנים גלובליים
 FAQ_PATH = "faq.txt"
@@ -280,9 +280,53 @@ def search_faq(query: str) -> Dict[str, Any]:
         else:
             return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
 
+        # השלמת הקטע שנחתך כאן - מילוי מערך השאלות הדומות
         if result_item:
             seen_questions = set()
             seen_questions.add(result_item.question.strip())
             
             for doc, score, idx in unique_hits:
                 q_text = faq_items[idx].question.strip()
+                if q_text not in seen_questions:
+                    similar_questions.append(q_text)
+                    seen_questions.add(q_text)
+                if len(similar_questions) >= 3:
+                    break
+    
+    elif best_fuzzy_score >= 55:
+        result_item = copy.deepcopy(faq_items[top[0][1]])
+        
+    if not result_item:
+        return {"success": True, "answer_html": friendly_no_answer, "similar_questions": []}
+
+    answer_text = result_item.answer.strip()
+    answer_text += f"\n\n--- מטא דאטה ---\nמקור: faq\nשאלה מזוהה: {result_item.question}"
+    
+    return {
+        "success": True, 
+        "answer_html": format_answer_for_html(answer_text),
+        "similar_questions": similar_questions
+    }
+
+# ============================================
+# ניתובים (Routes) של Flask
+# ============================================
+
+@app.route('/')
+def index():
+    return render_template('index.html', popular_questions=POPULAR_FAQ_LIST)
+
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json() or {}
+    query = data.get('query', '')
+    
+    if not query:
+        return jsonify({"success": False, "answer_html": "שאילתה ריקה."})
+    
+    result = search_faq(query)
+    return jsonify(result)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
