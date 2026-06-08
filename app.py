@@ -112,6 +112,10 @@ def format_answer_for_html(text: str) -> str:
     def replace_link(match):
         link_name = match.group(1).strip()
         
+        # הגנה מפני הפיכת ה"שאלה מזוהה" לקישור כחול
+        if link_name.startswith("שאלה מזוהה:"):
+            return f"[{link_name}]"
+            
         if link_name in url_mapping:
             url = url_mapping[link_name]
             if "@" in url and "://" not in url:
@@ -279,44 +283,45 @@ def search_faq(query: str) -> Dict[str, Any]:
         if unique_hits:
             best_embed_score = float(unique_hits[0][1])
             semantic_question_text = faq_items[unique_hits[0][2]].question
-          
-        # --- שלב הבורר הלוגי המשופר ---
-        if unique_hits and best_embed_score <= 0.25:
-            result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
-            search_type = "סמנטי (זכות וטו קיצונית)"
-            chosen_question_text = semantic_question_text
 
-        elif best_fuzzy_score >= 85:
-            result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי (ציון גבוה)"
-            chosen_question_text = fuzzy_question_text
+    # --- שלב הבורר הלוגי המשופר (מיושר החוצה ומאובטח!) ---
+    if unique_hits and best_embed_score <= 0.25:
+        result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
+        search_type = "סמנטי (זכות וטו קיצונית)"
+        chosen_question_text = semantic_question_text
 
-        elif best_fuzzy_score >= 75 and best_embed_score > 0.35:
-            result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי (עדיפות על סמנטי בינוני)"
-            chosen_question_text = fuzzy_question_text
+    elif best_fuzzy_score >= 85:
+        result_item = copy.deepcopy(faq_items[top[0][1]])
+        search_type = "פאזי (ציון גבוה)"
+        chosen_question_text = fuzzy_question_text
 
-        elif unique_hits and best_embed_score <= 1.15:
-            result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
-            search_type = "סמנטי"
-            chosen_question_text = semantic_question_text
+    elif best_fuzzy_score >= 75 and best_embed_score > 0.35:
+        result_item = copy.deepcopy(faq_items[top[0][1]])
+        search_type = "פאזי (עדיפות על סמנטי בינוני)"
+        chosen_question_text = fuzzy_question_text
 
-        elif best_fuzzy_score >= 60:
-            result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי (חלש)"
-            chosen_question_text = fuzzy_question_text
-            
-        if result_item:
-            seen_questions = set()
-            seen_questions.add(result_item.question.strip())
-            
-            for doc, score, idx in unique_hits:
-                q_text = faq_items[idx].question.strip()
-                if q_text not in seen_questions:
-                    similar_questions.append(q_text)
-                    seen_questions.add(q_text)
-                if len(similar_questions) >= 3:
-                    break
+    elif unique_hits and best_embed_score <= 1.15:
+        result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
+        search_type = "סמנטי"
+        chosen_question_text = semantic_question_text
+
+    elif best_fuzzy_score >= 60:
+        result_item = copy.deepcopy(faq_items[top[0][1]])
+        search_type = "פאזי (חלש)"
+        chosen_question_text = fuzzy_question_text
+        
+    # מילוי מערך השאלות הדומות במידה ונמצאה תוצאה
+    if result_item and unique_hits:
+        seen_questions = set()
+        seen_questions.add(result_item.question.strip())
+        
+        for doc, score, idx in unique_hits:
+            q_text = faq_items[idx].question.strip()
+            if q_text not in seen_questions:
+                similar_questions.append(q_text)
+                seen_questions.add(q_text)
+            if len(similar_questions) >= 3:
+                break
     
     # --- מסלול ב': פילבק (Fallback) לפאזי בלבד ---
     if not result_item and best_fuzzy_score >= 55:
@@ -354,7 +359,7 @@ def search_faq(query: str) -> Dict[str, Any]:
         "answer_html": format_answer_for_html(answer_text),
         "similar_questions": similar_questions
     }
-  
+
 # ============================================
 # ניתובים (Routes) של Flask
 # ============================================
