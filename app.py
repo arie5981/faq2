@@ -282,27 +282,31 @@ def search_faq(query: str) -> Dict[str, Any]:
             best_embed_score = float(unique_hits[0][1])
             semantic_question_text = faq_items[unique_hits[0][2]].question
           
-        # שלב הבורר הלוגי המלוטש והבטוח - הקשחת רף הווטו ל-0.25
+# --- שלב הבורר הלוגי המשופר ---
         if unique_hits and best_embed_score <= 0.25:
-            # ודאות סמנטית קיצונית ואמיתית (ללא בונוסים מזויפים)
+            # 1. ודאות סמנטית עילאית - לוקח תמיד
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי (זכות וטו קיצונית)"
 
-        elif best_fuzzy_score >= 90:
-            result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי"
-
         elif best_fuzzy_score >= 85:
+            # 2. התאמה פאזית מצוינת
             result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי"
+            search_type = "פאזי (ציון גבוה)"
+
+        elif best_fuzzy_score >= 75 and best_embed_score > 0.35:
+            # 3. הפאזי די בטוח (מעל 75) והסמנטי מגמגם (מעל 0.35) - סומכים על הפאזי!
+            result_item = copy.deepcopy(faq_items[top[0][1]])
+            search_type = "פאזי (עדיפות על סמנטי בינוני)"
 
         elif unique_hits and best_embed_score <= 1.15:
+            # 4. התאמה סמנטית רגילה
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי"
 
         elif best_fuzzy_score >= 60:
+            # 5. רשת ביטחון פאזית נמוכה
             result_item = copy.deepcopy(faq_items[top[0][1]])
-            search_type = "פאזי"
+            search_type = "פאזי (חלש)"
             
         # מילוי מערך השאלות הדומות במידה ונמצאה תוצאה
         if result_item:
