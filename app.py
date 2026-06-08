@@ -56,7 +56,7 @@ def normalize_he(s: str) -> str:
             s = re.sub(p, repl, s)
             break
 
-    # --- שינוי 2: נירמול גמיש ורחב של מונחי עמדות לטובת זיהוי משתמשים ---
+    # --- נירמול גמיש ורחב של מונחי עמדות לטובת זיהוי משתמשים ---
     s = s.replace("עמדת מחשב", "משתמש חדש")
     s = s.replace("עמדה למחשב", "משתמש חדש")
     s = s.replace("עמדה", "משתמש חדש")
@@ -167,7 +167,6 @@ def ensure_data_loaded():
 
             embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=openai_api_key)
             
-            # --- שינוי 1 חלק א': פירוק כל וריאנט למסמך עצמאי למניעת מיהול סמנטי ---
             docs = []
             for i, item in enumerate(faq_items):
                 docs.append(Document(page_content=item.question, metadata={"idx": i}))
@@ -182,7 +181,7 @@ def ensure_data_loaded():
             print(f"❌ בניית ה-Embeddings נכשלה: {e}. המערכת תתבסס על חיפוש פאזי בלבד.")
             embeddings_ready = False
           
-    def search_faq(query: str) -> Dict[str, Any]:
+def search_faq(query: str) -> Dict[str, Any]:
     """מבצע את לוגיקת החיפוש המקורית, עם הגנה מפני כפילויות ונטרול עיוות אינטנטים."""
     global faq_store, faq_items, embeddings_ready
     
@@ -291,27 +290,22 @@ def ensure_data_loaded():
           
         # שלב הבורר הלוגי המלוטש והבטוח
         if unique_hits and best_embed_score <= 0.35:
-            # 1. ודאות סמנטית עילאית - אין סיכוי לטעות, לוקח עדיפות ראשונה בהחלט
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי (זכות וטו קיצונית)"
 
         elif best_fuzzy_score >= 90:
-            # 2. התאמת מילים כמעט מושלמת (אם הסמנטי לא היה פגיעה ישירה)
             result_item = copy.deepcopy(faq_items[top[0][1]])
             search_type = "פאזי"
 
         elif best_fuzzy_score >= 85:
-            # 3. התאמה פאזית טובה מאוד
             result_item = copy.deepcopy(faq_items[top[0][1]])
             search_type = "פאזי"
 
         elif unique_hits and best_embed_score <= 1.15:
-            # 4. התאמה סמנטית רגילה (כשהטקסטים שונים באותיות אבל קרובים ברעיון)
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי"
 
         elif best_fuzzy_score >= 60:
-            # 5. רשת ביטחון אחרונה לפאזי חלקי
             result_item = copy.deepcopy(faq_items[top[0][1]])
             search_type = "פאזי"
             
