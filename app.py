@@ -258,25 +258,18 @@ def search_faq(query: str) -> Dict[str, Any]:
 # --- מסלול א': חיפוש משולב (סמנטי + פאזי) כאשר האינדקס מוכן ---
     if embeddings_ready and faq_store:
         try:
-            # שולחים את query המקורי כדי ש-OpenAI יבין את המילה "עמדה" בהקשר הנכון
+            # שולחים את query המקורי ונקי ל-OpenAI
             hits = faq_store.similarity_search_with_score(query, k=12)
         except Exception as e:
             print(f"Error during similarity search: {e}")
             hits = []
 
-        key_words = ["יפוי", "כוח", "הרשאה", "ייצוג", "מייצג", "מעסיק", "מבוטח"]
-        
         seen_indices = set()
         unique_hits = []
 
+        # בניית רשימת תוצאות ייחודיות ללא עיוותי בונוסים (key_words בוטל)
         for doc, score in hits:
             idx = doc.metadata["idx"]
-            
-            question_text = faq_items[idx].question
-            text_norm = normalize_he(question_text + " " + " ".join(faq_items[idx].variants))
-            for kw in key_words:
-                if kw in nq and kw in text_norm:
-                    score -= 0.15
             
             if idx not in seen_indices:
                 unique_hits.append((doc, score, idx))
@@ -289,8 +282,9 @@ def search_faq(query: str) -> Dict[str, Any]:
             best_embed_score = float(unique_hits[0][1])
             semantic_question_text = faq_items[unique_hits[0][2]].question
           
-        # שלב הבורר הלוגי המלוטש והבטוח
-        if unique_hits and best_embed_score <= 0.35:
+        # שלב הבורר הלוגי המלוטש והבטוח - הקשחת רף הווטו ל-0.25
+        if unique_hits and best_embed_score <= 0.25:
+            # ודאות סמנטית קיצונית ואמיתית (ללא בונוסים מזויפים)
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי (זכות וטו קיצונית)"
 
