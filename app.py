@@ -180,7 +180,7 @@ def ensure_data_loaded():
         except Exception as e:
             print(f"❌ בניית ה-Embeddings נכשלה: {e}. המערכת תתבסס על חיפוש פאזי בלבד.")
             embeddings_ready = False
-          
+            
 def search_faq(query: str) -> Dict[str, Any]:
     """מבצע את לוגיקת החיפוש המקורית, עם הגנה מפני כפילויות ונטרול עיוות אינטנטים."""
     global faq_store, faq_items, embeddings_ready
@@ -205,6 +205,7 @@ def search_faq(query: str) -> Dict[str, Any]:
     # ==========================================================
     search_type = "לא נקבע"
     result_item = None
+    chosen_question_text = ""  # ישמור את השאלה הרשמית ממאגר ה-FAQ שנבחרה בפועל
     similar_questions = []
     
     best_fuzzy_score = 0.0
@@ -260,7 +261,6 @@ def search_faq(query: str) -> Dict[str, Any]:
     unique_hits = []
     if embeddings_ready and faq_store:
         try:
-            # שולחים את query המקורי ונקי ל-OpenAI
             hits = faq_store.similarity_search_with_score(query, k=12)
         except Exception as e:
             print(f"Error during similarity search: {e}")
@@ -268,48 +268,44 @@ def search_faq(query: str) -> Dict[str, Any]:
 
         seen_indices = set()
 
-        # בניית רשימת תוצאות ייחודיות ללא עיוותי בונוסים (key_words בוטל)
         for doc, score in hits:
             idx = doc.metadata["idx"]
-            
             if idx not in seen_indices:
                 unique_hits.append((doc, score, idx))
                 seen_indices.add(idx)
 
         unique_hits.sort(key=lambda x: x[1])
         
-        # שמירת השאלה והציון של המנוע הסמנטי
         if unique_hits:
             best_embed_score = float(unique_hits[0][1])
             semantic_question_text = faq_items[unique_hits[0][2]].question
           
-        # --- שלב הבורר הלוגי המשופר (מוזח פנימה לבלוק התוצאות) ---
+        # --- שלב הבורר הלוגי המשופר ---
         if unique_hits and best_embed_score <= 0.25:
-            # 1. ודאות סמנטית עילאית - לוקח תמיד
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי (זכות וטו קיצונית)"
+            chosen_question_text = semantic_question_text
 
         elif best_fuzzy_score >= 85:
-            # 2. התאמה פאזית מצוינת
             result_item = copy.deepcopy(faq_items[top[0][1]])
             search_type = "פאזי (ציון גבוה)"
+            chosen_question_text = fuzzy_question_text
 
         elif best_fuzzy_score >= 75 and best_embed_score > 0.35:
-            # 3. הפאזי די בטוח (מעל 75) והסמנטי מגמגם (מעל 0.35) - סומכים על הפאזי!
             result_item = copy.deepcopy(faq_items[top[0][1]])
             search_type = "פאזי (עדיפות על סמנטי בינוני)"
+            chosen_question_text = fuzzy_question_text
 
         elif unique_hits and best_embed_score <= 1.15:
-            # 4. התאמה סמנטית רגילה
             result_item = copy.deepcopy(faq_items[unique_hits[0][2]])
             search_type = "סמנטי"
+            chosen_question_text = semantic_question_text
 
         elif best_fuzzy_score >= 60:
-            # 5. רשת ביטחון פאזית נמוכה
             result_item = copy.deepcopy(faq_items[top[0][1]])
             search_type = "פאזי (חלש)"
+            chosen_question_text = fuzzy_question_text
             
-        # מילוי מערך השאלות הדומות במידה ונמצאה תוצאה
         if result_item:
             seen_questions = set()
             seen_questions.add(result_item.question.strip())
@@ -322,12 +318,12 @@ def search_faq(query: str) -> Dict[str, Any]:
                 if len(similar_questions) >= 3:
                     break
     
-    # --- מסלול ב': פילבק (Fallback) לפאזי בלבד (במידה והסמנטי לא מצא או לא זמין) ---
+    # --- מסלול ב': פילבק (Fallback) לפאזי בלבד ---
     if not result_item and best_fuzzy_score >= 55:
         result_item = copy.deepcopy(faq_items[top[0][1]])
         search_type = "פאזי"
+        chosen_question_text = fuzzy_question_text
         
-    # בדיקה סופית: מה קורה כשהוא לא מוצא תשובה?
     if not result_item:
         return {
             "success": True, 
@@ -335,18 +331,19 @@ def search_faq(query: str) -> Dict[str, Any]:
             "similar_questions": []
         }
 
-    # עיבוד תצוגת הציון הסמנטי למשתמש
     if best_embed_score == 999.0:
         semantic_display = "0"
     else:
         semantic_display = f"{best_embed_score:.2f}"
 
-    # הגדרת סימוני חץ דינמיים לפי המנוע שנבחר בסוף
     fuzzy_prefix = "=>" if "פאזי" in search_type else ""
     semantic_prefix = "=>" if "סמנטי" in search_type else ""
 
-    # בניית הטקסט ותוספת המטא-דאטה הדו-מסלולי עם סימוני החצים
-    answer_text = result_item.answer.strip()
+    # --- בניית התשובה הסופית ושילוב השאלה המזוהה בראש המשפט ---
+    answer_text = f"[שאלה מזוהה: {chosen_question_text}]\n"
+    answer_text += result_item.answer.strip()
+    
+    # הוספת מקטע המטא-דאטה המלא בסוף
     answer_text += f"\n\n--- מטא דאטה ---"
     answer_text += f"\nמקור: faq  מנוע נבחר: {search_type}.  ציון פאזי: {best_fuzzy_score:.1f}.  ציון סמנטי: {semantic_display}"
     answer_text += f"\n{fuzzy_prefix}שאלה מזוהה פאזי: {fuzzy_question_text}"
