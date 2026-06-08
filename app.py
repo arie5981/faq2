@@ -255,10 +255,11 @@ def search_faq(query: str) -> Dict[str, Any]:
         best_fuzzy_score = float(top[0][0])
         fuzzy_question_text = faq_items[top[0][1]].question
 
-    # --- מסלול א': חיפוש משולב (סמנטי + פאזי) כאשר האינדקס מוכן ---
+# --- מסלול א': חיפוש משולב (סמנטי + פאזי) כאשר האינדקס מוכן ---
     if embeddings_ready and faq_store:
         try:
-            hits = faq_store.similarity_search_with_score(nq, k=12)
+            # שולחים את query המקורי כדי ש-OpenAI יבין את המילה "עמדה" בהקשר הנכון
+            hits = faq_store.similarity_search_with_score(query, k=12)
         except Exception as e:
             print(f"Error during similarity search: {e}")
             hits = []
